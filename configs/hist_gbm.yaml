@@ -1,0 +1,22 @@
+name: hist_gbm
+seed: 42
+
+data:
+  source: file
+  train_path: data/raw/synthetic/train.parquet
+  test_path: data/raw/synthetic/test.parquet
+  target: max_temp
+  id_column: id
+  time_column: date
+
+split:
+  strategy: time
+  valid_fraction: 0.2
+
+model:
+  name: hist_gbm
+  params:
+    max_iter: 300
+    learning_rate: 0.05
+
+metrics: [mae, rmse, r2]

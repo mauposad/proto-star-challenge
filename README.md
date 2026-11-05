@@ -1,2 +1,75 @@
 # proto-star-challenge
-AI systems to analyze extreme weather trends and recommend climate adaptation strategies. Challenge to build a forecast AI model in collaboration with CMU OSPO and Hugging Face
+
+AI systems to analyze extreme weather trends and recommend climate adaptation strategies.
+Challenge to build a forecast AI model in collaboration with CMU OSPO and Hugging Face.
+
+## Quickstart
+
+```bash
+# 1. Install uv (once per machine): https://docs.astral.sh/uv/
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 2. Clone and set up (creates .venv with pinned Python 3.12 + all deps, installs git hooks)
+git clone git@github.com:mauposad/proto-star-challenge.git
+cd proto-star-challenge
+make setup            # = uv sync && uv run pre-commit install
+cp .env.example .env  # then add your HF_TOKEN
+
+# 3. Smoke-test the pipeline on synthetic data
+uv run python scripts/make_synthetic_data.py
+uv run proto-star train configs/baseline.yaml
+uv run proto-star predict runs/<run-dir-printed-above>
+```
+
+Optional extras: `uv sync --extra hf` (torch + transformers), `uv sync --extra geo`
+(xarray/NetCDF/Zarr for gridded climate data).
+
+## Repository layout
+
+```
+configs/            One YAML per experiment. The config *is* the experiment.
+data/               Git-ignored. raw/ (immutable) -> interim/ -> processed/. See docs/data.md
+docs/               Data card, experiment log, design decisions (ADRs)
+notebooks/          Exploration only. Naming: NN_initials_topic.ipynb
+runs/               Git-ignored. One folder per training run (model, metrics, config, git sha)
+scripts/            One-off utilities (data download, synthetic data, demos)
+src/proto_star/     The package. Reusable code lives here, not in notebooks
+  data/             load -> validate -> features -> split
+  models/           Model registry (sklearn-style fit/predict)
+  train.py          config -> fitted model + metrics in runs/
+  predict.py        run -> validated leaderboard submission in submissions/
+  evaluate.py       Metrics
+submissions/        Git-ignored. Leaderboard CSVs
+tests/              pytest suite, run in CI on every PR
+```
+
+## Common commands
+
+| Command | What it does |
+|---|---|
+| `make check` | Lint, type-check, test (same as CI) |
+| `make format` | Auto-fix lint and formatting |
+| `uv run proto-star models` | List registered models |
+| `uv run proto-star validate-data <config>` | Check data without training |
+| `uv run proto-star train <config>` | Train, evaluate on validation split, save run |
+| `uv run proto-star predict <run-dir>` | Write a validated submission CSV |
+| `uv add <pkg>` | Add a dependency (updates `pyproject.toml` + `uv.lock`; commit both) |
+| `uv run jupyter lab` | Notebooks, using the project environment |
+
+## AI coding agents
+
+Agents (Claude Code, Codex, Cursor, Copilot, ...) must follow [AGENTS.md](AGENTS.md).
+Claude Code also enforces the hard guardrails in `.claude/settings.json`; put personal
+overrides in `.claude/settings.local.json` (git-ignored).
+
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before your first PR. In short: branch from `main`,
+one config per experiment, log results in [docs/experiments.md](docs/experiments.md), and
+`make check` must pass.
+
+## Status
+
+The challenge dataset and official metric are **not known yet**. The pipeline runs on
+synthetic data (`scripts/make_synthetic_data.py`). When the real data lands, follow
+"Onboarding real data" in [docs/data.md](docs/data.md).

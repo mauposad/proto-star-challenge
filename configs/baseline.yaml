@@ -1,0 +1,28 @@
+# Baseline experiment on synthetic data. Copy this file to start a new experiment:
+#   cp configs/baseline.yaml configs/<your-initials>_<short-description>.yaml
+name: baseline_mean
+seed: 42
+
+data:
+  source: file                       # file | hf
+  train_path: data/raw/synthetic/train.parquet
+  test_path: data/raw/synthetic/test.parquet
+  target: max_temp
+  id_column: id
+  time_column: date
+  features: null                     # null = all numeric columns except target/id/time
+  calendar_features: true
+
+split:
+  strategy: time                     # time (default for forecasting) | random
+  valid_fraction: 0.2
+
+model:
+  name: mean_baseline                # see `uv run proto-star models`
+  params: {}
+
+metrics: [mae, rmse, r2]             # put the official leaderboard metric first
+
+submission:
+  id_column: id
+  prediction_column: prediction

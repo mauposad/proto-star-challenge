@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(make check)",
+      "Bash(make format)",
+      "Bash(make lint)",
+      "Bash(make test)",
+      "Bash(uv sync:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(uv run mypy:*)",
+      "Bash(uv run proto-star:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ],
+    "ask": [
+      "Bash(uv add:*)",
+      "Bash(uv remove:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(rm:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Edit(./.env)",
+      "Edit(./data/raw/**)",
+      "Edit(./data/external/**)",
+      "Write(./data/raw/**)",
+      "Write(./data/external/**)",
+      "Edit(./uv.lock)",
+      "Edit(./runs/**)",
+      "Edit(./submissions/**)",
+      "Bash(pip install:*)",
+      "Bash(pip3 install:*)",
+      "Bash(uv pip install:*)",
+      "Bash(conda install:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git commit --no-verify:*)",
+      "Bash(git commit -n:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean:*)",
+      "Bash(git add -f:*)",
+      "Bash(git add --force:*)",
+      "Bash(rm -rf data:*)",
+      "Bash(rm -rf runs:*)",
+      "Bash(rm -rf submissions:*)",
+      "Bash(huggingface-cli upload:*)",
+      "Bash(hf upload:*)"
+    ]
+  }
+}

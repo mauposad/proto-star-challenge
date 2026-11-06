@@ -52,5 +52,67 @@ def models() -> None:
     typer.echo("\n".join(available_models()))
 
 
+@app.command("download-climate-data")
+def download_climate_data() -> None:
+    """Download official annual challenge data, enforcing the 2018 cutoff."""
+    from scripts.download_protostar_data import main
+
+    main()
+
+
+@app.command("climate-backtest")
+def climate_backtest(
+    annual_path: Path = typer.Argument(
+        ..., help="Local annual_indices.parquet downloaded from CMU"
+    ),
+    cutoff: list[int] = typer.Option(
+        [1997, 2002, 2007, 2011], help="Historical origin year; may be provided repeatedly"
+    ),
+) -> None:
+    """Compare leakage-safe climate baselines over seven-year historical horizons."""
+    import pandas as pd
+
+    from proto_star.climate import annual_to_long, backtest_baselines
+
+    history = annual_to_long(pd.read_parquet(annual_path))
+    results = backtest_baselines(history, cutoffs=cutoff)
+    typer.echo(results.to_csv(index=False))
+
+
+@app.command("climate-submission")
+def climate_submission(
+    annual_path: Path = typer.Argument(
+        ..., help="Local annual_indices.parquet downloaded from CMU"
+    ),
+    city_path: Path = typer.Argument(..., help="Local city_info.parquet downloaded from CMU"),
+    method: str = typer.Option("linear_trend", help="Baseline method selected from backtests"),
+    output: Path = typer.Option(Path("submissions/protostar_baseline.csv")),
+) -> None:
+    """Write and validate a complete 2019-2025 ProtoStar forecast submission."""
+    import pandas as pd
+
+    from proto_star.climate import (
+        FORECAST_CUTOFF,
+        FORECAST_YEARS,
+        annual_to_long,
+        baseline_forecast,
+        validate_submission,
+    )
+
+    annual = pd.read_parquet(annual_path)
+    cities = pd.read_parquet(city_path)
+    history = annual_to_long(annual)
+    submission = baseline_forecast(
+        history,
+        cutoff_year=FORECAST_CUTOFF,
+        forecast_years=FORECAST_YEARS,
+        method=method,
+    ).sort_values(["city_id", "year", "metric"])
+    validate_submission(submission, cities["ID"].astype(str).unique())
+    output.parent.mkdir(parents=True, exist_ok=True)
+    submission.to_csv(output, index=False)
+    typer.echo(output)
+
+
 if __name__ == "__main__":
     app()

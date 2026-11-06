@@ -60,6 +60,22 @@ def download_climate_data() -> None:
     main()
 
 
+@app.command("download-station-metadata")
+def download_station_metadata() -> None:
+    """Download static NOAA station metadata for interoperability analysis."""
+    from scripts.download_ghcn_station_metadata import main
+
+    main()
+
+
+@app.command("climate-metadata-report")
+def climate_metadata_report() -> None:
+    """Join CMU challenge cities to the downloaded static NOAA station metadata."""
+    from scripts.build_station_metadata_report import main
+
+    main()
+
+
 @app.command("climate-backtest")
 def climate_backtest(
     annual_path: Path = typer.Argument(
@@ -112,6 +128,42 @@ def climate_submission(
     output.parent.mkdir(parents=True, exist_ok=True)
     submission.to_csv(output, index=False)
     typer.echo(output)
+
+
+@app.command("climate-ensemble-submission")
+def climate_ensemble_submission(
+    annual_path: Path = typer.Argument(
+        ..., help="Local annual_indices.parquet downloaded from CMU"
+    ),
+    city_path: Path = typer.Argument(..., help="Local city_info.parquet downloaded from CMU"),
+    output: Path = typer.Option(Path("submissions/protostar_metric_ensemble.csv")),
+) -> None:
+    """Write the backtest-selected metric-specific 2019-2025 forecast submission."""
+    import pandas as pd
+
+    from proto_star.climate import (
+        FORECAST_CUTOFF,
+        FORECAST_YEARS,
+        annual_to_long,
+        backtest_baselines,
+        metric_ensemble_forecast,
+        select_metric_methods,
+        validate_submission,
+    )
+
+    history = annual_to_long(pd.read_parquet(annual_path))
+    backtests = backtest_baselines(history, cutoffs=[1997, 2002, 2007, 2011])
+    methods = select_metric_methods(backtests)
+    submission = metric_ensemble_forecast(
+        history,
+        cutoff_year=FORECAST_CUTOFF,
+        forecast_years=FORECAST_YEARS,
+        methods_by_metric=methods,
+    ).sort_values(["city_id", "year", "metric"])
+    validate_submission(submission, pd.read_parquet(city_path)["ID"].astype(str).unique())
+    output.parent.mkdir(parents=True, exist_ok=True)
+    submission.to_csv(output, index=False)
+    typer.echo(f"{output} using {methods}")
 
 
 if __name__ == "__main__":

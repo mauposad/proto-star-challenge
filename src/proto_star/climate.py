@@ -23,6 +23,12 @@ SUBMISSION_COLUMNS = ["city_id", "year", "metric", "predicted_value"]
 FORECAST_CUTOFF = 2018
 FORECAST_YEARS = tuple(range(2019, 2026))
 MAX_MISSING_DAYS = 10
+BASELINE_METHODS = (
+    "last_valid_year",
+    "ten_year_mean",
+    "thirty_year_mean",
+    "linear_trend",
+)
 
 
 class ClimateDataError(ValueError):
@@ -237,12 +243,7 @@ def backtest_baselines(
     *,
     cutoffs: Iterable[int],
     horizon: int = 7,
-    methods: Iterable[str] = (
-        "last_valid_year",
-        "ten_year_mean",
-        "thirty_year_mean",
-        "linear_trend",
-    ),
+    methods: Iterable[str] = BASELINE_METHODS,
 ) -> pd.DataFrame:
     """Evaluate methods at multiple historical origins using challenge scoring."""
     rows: list[dict[str, float | int | str]] = []
@@ -267,6 +268,81 @@ def backtest_baselines(
                 row[f"{metric}_mae"] = score.mae[metric]
                 row[f"{metric}_skill"] = score.skill[metric]
             rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def select_metric_methods(backtest_results: pd.DataFrame) -> dict[str, str]:
+    """Select the highest mean-skill baseline for each official metric."""
+    if "method" not in backtest_results.columns:
+        raise ClimateDataError("backtest results are missing the method column")
+
+    selected: dict[str, str] = {}
+    for metric in METRICS:
+        skill_column = f"{metric}_skill"
+        if skill_column not in backtest_results.columns:
+            raise ClimateDataError(f"backtest results are missing {skill_column!r}")
+        mean_skill = backtest_results.groupby("method")[skill_column].mean()
+        if mean_skill.empty:
+            raise ClimateDataError("backtest results contain no methods")
+        best_skill = float(mean_skill.max())
+        selected[metric] = sorted(mean_skill[mean_skill == best_skill].index.astype(str))[0]
+    return selected
+
+
+def metric_ensemble_forecast(
+    history: pd.DataFrame,
+    *,
+    cutoff_year: int,
+    forecast_years: Iterable[int],
+    methods_by_metric: dict[str, str],
+) -> pd.DataFrame:
+    """Forecast each metric with its independently backtest-selected method."""
+    if set(methods_by_metric) != set(METRICS):
+        raise ValueError(f"methods_by_metric must contain exactly {list(METRICS)}")
+
+    forecasts = []
+    for metric in METRICS:
+        forecast = baseline_forecast(
+            history,
+            cutoff_year=cutoff_year,
+            forecast_years=forecast_years,
+            method=methods_by_metric[metric],
+        )
+        forecasts.append(forecast.loc[forecast["metric"] == metric])
+    return pd.concat(forecasts, ignore_index=True)
+
+
+def backtest_metric_ensemble(
+    history: pd.DataFrame,
+    *,
+    cutoffs: Iterable[int],
+    methods_by_metric: dict[str, str],
+    horizon: int = 7,
+) -> pd.DataFrame:
+    """Score one metric-specific ensemble at each historical forecast origin."""
+    rows: list[dict[str, float | int]] = []
+    for cutoff in cutoffs:
+        years = range(cutoff + 1, cutoff + horizon + 1)
+        truth = history.loc[history["year"].isin(years)]
+        reference = baseline_forecast(
+            history, cutoff_year=cutoff, forecast_years=years, method="thirty_year_mean"
+        )
+        forecast = metric_ensemble_forecast(
+            history,
+            cutoff_year=cutoff,
+            forecast_years=years,
+            methods_by_metric=methods_by_metric,
+        )
+        score = official_score(forecast, truth, reference)
+        row: dict[str, float | int] = {
+            "cutoff_year": cutoff,
+            "score": score.score,
+            "n_rows": score.n_rows,
+        }
+        for metric in METRICS:
+            row[f"{metric}_mae"] = score.mae[metric]
+            row[f"{metric}_skill"] = score.skill[metric]
+        rows.append(row)
     return pd.DataFrame(rows)
 
 

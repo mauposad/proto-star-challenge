@@ -68,8 +68,18 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before your first PR. In short: branch f
 one config per experiment, log results in [docs/experiments.md](docs/experiments.md), and
 `make check` must pass.
 
-## Status
+## Climate challenge workflow
 
-The challenge dataset and official metric are **not known yet**. The pipeline runs on
-synthetic data (`scripts/make_synthetic_data.py`). When the real data lands, follow
-"Onboarding real data" in [docs/data.md](docs/data.md).
+The official CMU climate dataset and scoring rule are now supported alongside the
+generic synthetic workflow:
+
+```bash
+uv run python scripts/download_protostar_data.py
+uv run proto-star climate-backtest data/raw/protostar/annual_indices.parquet
+uv run proto-star climate-submission `
+  data/raw/protostar/annual_indices.parquet data/raw/protostar/city_info.parquet
+```
+
+The initial methods are leakage-safe 30-year, 10-year, last-observation and
+linear-trend baselines. Select later models only through rolling historical
+backtests; never use the leaderboard or post-2018 weather to tune a forecast.

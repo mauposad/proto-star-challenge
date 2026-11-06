@@ -26,15 +26,33 @@ data (`uv sync --extra geo`).
 - **Schema:** `id` (int), `date` (date), `station_id` (int), `humidity` (float, %),
   `pressure` (float, hPa), `max_temp` (float, °C, **target**, train only)
 
-### challenge dataset (TBD)
+### CMU ProtoStar climate training data
 
-- **Source / URL:**
-- **Download:** `uv run python scripts/download_data.py` *(to write)*
-- **License:**
-- **Temporal / spatial coverage:**
-- **Target & units:**
-- **Official metric:**
-- **Known issues:** (missing values, sensor errors, unit changes, ...)
+- **Source / URL:** `CMU-OSPO/protostar-climate-train-to-2018` on Hugging Face;
+  original records: Lai & Dzombak (2019), DOI
+  [10.1184/R1/7890488.v6](https://doi.org/10.1184/R1/7890488.v6).
+- **Download:** `uv run python scripts/download_protostar_data.py`. This deliberately
+  downloads only `annual_indices` and `city_info`, not the 10M-row daily table.
+- **License:** CC0-1.0.
+- **Temporal / spatial coverage:** 210 U.S. cities, historical values through
+  2018-12-31 only.
+- **Targets / units:** annual average temperature (°F), total precipitation
+  (inches), hottest-day temperature (°F), cooling degree days (°F-days).
+- **Official metric:** equal-weight mean relative MAE skill against the 30-year
+  average baseline, floored at zero; implemented in `proto_star.climate`.
+- **Known issues:** incomplete days can bias annual totals; a metric is eligible
+  only when its relevant missing-day column(s) are at most 10. Threaded station
+  changes can create discontinuities. Stations are mostly airports and do not
+  support neighborhood-scale heat claims.
+
+#### Leakage policy
+
+Forecasting code may only use weather observations dated on or before
+2018-12-31. The download script and `annual_to_long` reject later years. Do not
+add 2019–2025 weather-responsive data (weather, energy demand, air quality,
+streamflow, vegetation or disease observations) to a forecasting feature set.
+Static, non-weather-responsive data may be used only after its provenance,
+license, and join logic are documented here.
 
 ## Onboarding real data
 

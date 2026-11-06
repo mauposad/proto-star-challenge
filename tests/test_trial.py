@@ -94,7 +94,7 @@ def test_run_trial_records_what_was_used(config_path: Path, tmp_path: Path) -> N
         assert expected in note
 
 
-def _package(config_path: Path, tmp_path: Path) -> Path:
+def _package(config_path: Path, tmp_path: Path, team_path: Path | None = None) -> Path:
     master_dir, raw_dir = tmp_path / "processed", tmp_path / "raw"
     master_dir.mkdir()
     raw_dir.mkdir()
@@ -109,6 +109,7 @@ def _package(config_path: Path, tmp_path: Path) -> Path:
         master_dir=master_dir,
         raw_dir=raw_dir,
         out_root=tmp_path / "submissions",
+        **({"team_path": team_path} if team_path else {}),
     )
 
 
@@ -142,7 +143,27 @@ def test_package_reproduces_and_detects_tampering(config_path: Path, tmp_path: P
         verify_package(package)
 
 
-def test_package_lists_what_a_person_must_still_fill_in(config_path: Path, tmp_path: Path) -> None:
-    todo = open_placeholders(_package(config_path, tmp_path))
-    assert any("Team Name" in item for item in todo)
-    assert any("team to complete" in item for item in todo)
+def test_package_fills_in_team_details_from_team_file(config_path: Path, tmp_path: Path) -> None:
+    readme = (_package(config_path, tmp_path) / "README.md").read_text()
+    for expected in ("MKDir", "@MekkoMau", "@DeenOjo", "@corbe19", "Claude Code", "Warp"):
+        assert expected in readme
+    assert "<Team Name>" not in readme
+
+
+def test_package_lists_any_placeholder_left_in_the_team_file(
+    config_path: Path, tmp_path: Path
+) -> None:
+    team = tmp_path / "team.yaml"
+    team.write_text(
+        yaml.safe_dump(
+            {
+                "team_name": "<Team Name>",
+                "members": [{"name": "A", "hf_username": "@a", "affiliation": "TBD"}],
+                "ai_tools": "x",
+                "ai_work": "y",
+                "human_review": "z",
+            }
+        )
+    )
+    package = _package(config_path, tmp_path, team_path=team)
+    assert any("Team Name" in item for item in open_placeholders(package))

@@ -23,6 +23,7 @@ from importlib import metadata
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
 from proto_star.backtest import build_submission, compare_forecasters, summarize_backtest
 from proto_star.climate import DEFAULT_CUTOFFS, METRICS, ClimateSubmissionError
@@ -41,6 +42,7 @@ from proto_star.trial import (
 RAW_INPUTS = ("annual_indices.parquet", "city_info.parquet")
 REQUIREMENT_PACKAGES = ("numpy", "pandas", "pyarrow", "pyyaml", "pydantic")
 DOWNLOAD = "`python code/scripts/download_protostar_data.py`"
+TEAM_FILE = PROJECT_ROOT / "docs" / "submission" / "team.yaml"
 SUBMISSION_DOCS = ("policy-idea.md", "ecosystem-feedback.md")
 PLACEHOLDER = re.compile(r"<[^<>\n]*(?:team|username|institution|Name)[^<>\n]*>")
 REPRODUCE_SCRIPT = '''"""Rebuild submission.csv from ../data and compare it with the shipped file.
@@ -151,25 +153,45 @@ missing-day columns are at most 10.
 """
 
 
+def _team_sections(team: dict[str, object]) -> tuple[str, str]:
+    """Render the team table and the AI-tools section from ``team.yaml``."""
+    members = pd.DataFrame(
+        [
+            {
+                "Name": m["name"],
+                "Hugging Face username": m["hf_username"],
+                "University, Program": m["affiliation"],
+            }
+            for m in team["members"]  # type: ignore[attr-defined] # yaml gives untyped lists
+        ]
+    )
+    ai = f"""- Tools and models: {team["ai_tools"]}
+- What they did: {team["ai_work"]}
+- What a person reviewed: {team["human_review"]}"""
+    return markdown_table(members), ai
+
+
 def _readme(
     cfg: TrialConfig,
     forecaster: str,
     master: pd.DataFrame,
     config_name: str,
     meta: dict[str, object],
+    team: dict[str, object],
 ) -> str:
     results = compare_forecasters(
         {n: f for n, f in build_forecasters(cfg).items() if n in {forecaster, cfg.reference}},
         master,
     )
     summary = summarize_backtest(results, baseline=cfg.reference)
+    team_table, ai_section = _team_sections(team)
     dirty = " (with uncommitted changes)" if meta["dirty"] else ""
     docs = {
         name: (PROJECT_ROOT / "docs" / "submission" / name).read_text().strip()
         for name in SUBMISSION_DOCS
     }
     return f"""---
-pretty_name: "ProtoStar Climate Risk Intelligence - <Team Name>"
+pretty_name: "ProtoStar Climate Risk Intelligence - {team["team_name"]}"
 license: cc-by-4.0
 task_categories:
   - time-series-forecasting
@@ -179,7 +201,7 @@ tags:
   - protostar-climate-2026
 ---
 
-# <Team Name>: ProtoStar Climate Challenge Submission
+# {team["team_name"]}: ProtoStar Climate Challenge Submission
 
 Forecasts of annual average temperature, total precipitation, hottest-day temperature and
 cooling degree days for 210 U.S. cities, 2019-2025, built only from observations through
@@ -187,9 +209,7 @@ cooling degree days for 210 U.S. cities, 2019-2025, built only from observations
 
 ## Team
 
-| Name | Hugging Face username | University, Program |
-|---|---|---|
-| <team member> | <@username> | <institution and program> |
+{team_table}
 
 ## Method
 
@@ -207,7 +227,7 @@ Mean `raw_score` (the official score without its floor at zero) and per-metric s
 
 ## AI tools and agents
 
-<team to complete: tools and models used, what they did, what a person reviewed>
+{ai_section}
 
 Agent rules for this project are in `code/AGENTS.md`: they enforce the
 2018-12-31 cut-off and forbid agents from submitting or supplying forecast values.
@@ -249,6 +269,7 @@ def build_package(
     master_dir: Path | None = None,
     raw_dir: Path = PROTOSTAR_DIR,
     out_root: Path = SUBMISSIONS_DIR,
+    team_path: Path = TEAM_FILE,
 ) -> Path:
     """Write the submission folder for one forecaster and return its path."""
     cfg = load_trial_config(config_path)
@@ -273,7 +294,9 @@ def build_package(
     manifest = json.loads((master_dir / MANIFEST_FILE).read_text())
     (out_dir / "data" / "README.md").write_text(_data_card(files, manifest))
     meta = {**git_info(), "date": now.strftime("%Y-%m-%d")}
-    (out_dir / "README.md").write_text(_readme(cfg, name, data, config_path.name, meta))
+    (out_dir / "README.md").write_text(
+        _readme(cfg, name, data, config_path.name, meta, yaml.safe_load(team_path.read_text()))
+    )
     return out_dir
 
 

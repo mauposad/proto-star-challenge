@@ -9,7 +9,7 @@ Compare every built-in baseline, including the new 15-year mean, hinge fit and m
 |---|---|
 | Date | 2026-11-06 |
 | Config | `configs/mp_baselines_round1.yaml` |
-| Code version | `d6247e4` (uncommitted changes) |
+| Code version | `a0292c0` (uncommitted changes) |
 | Data | `data/processed/protostar/annual_master.parquet`, content hash `99128065d035cf531fe13c214e514b6bb73927ae90a80a9b903949d13abb04d1` |
 | Folds | cut-offs [1980, 1995, 2011], 7-year horizon (ADR 0004) |
 | Reference | `current_best` |

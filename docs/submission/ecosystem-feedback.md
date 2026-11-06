@@ -15,6 +15,11 @@
    inventory is a living file. A URL alone is insufficient to reproduce the
    exact metadata integration after an update.
 
+4. **No-data years look like real measurements.** In years with no observations, several
+   columns hold 0 or `±inf` instead of a blank: `ToT Prcp`, `Wet Days`, `Max 5-day P`, the
+   four warm and cold percentage columns, and the max/min columns. `Max 5-day P` even has a
+   nonzero value in 12 such years. Our master table blanks 13,160 of these cells.
+
 ## What would fix it
 
 1. Publish a `valid_<metric>` boolean for each annual index using the
@@ -25,3 +30,4 @@
 3. Include a release manifest with source URLs, retrieval date, checksum,
    cutoff date, units, and the exact evaluation-validity rule. That would make
    the dataset directly usable by both people and automated research agents.
+4. Store blanks for every index in a year with no observations of that variable.

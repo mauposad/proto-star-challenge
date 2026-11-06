@@ -84,3 +84,19 @@ uv run proto-star climate-submission `
 The initial methods are leakage-safe 30-year, 10-year, last-observation and
 linear-trend baselines. Select later models only through rolling historical
 backtests; never use the leaderboard or post-2018 weather to tune a forecast.
+
+## Method
+
+TODO: describe the forecasting method and the backtest results that justify it.
+
+## AI tools
+
+TODO: list every AI tool used and what it was used for (code only, never forecast values).
+
+## Policy idea
+
+TODO: describe the climate adaptation policy idea.
+
+## Feedback to the Ecosystem
+
+TODO: feedback for the organizers, datasets, and tools used.

@@ -29,8 +29,8 @@ average temperature and CDD require both Tmax and Tmin missing-day counts at
 most 10; total precipitation requires precipitation missing days at most 10;
 and hottest-day temperature requires Tmax missing days at most 10.
 
-We ran leakage-safe seven-year rolling backtests from 1997, 2002, 2007, and
-2011, scoring each target against the official 30-year-average reference.
+We ran leakage-safe seven-year rolling backtests from 1980, 1995, and 2011,
+scoring each target against the official 30-year-average reference.
 The final metric-specific ensemble uses:
 
 - `annual_avg_temp`: ten-year mean of valid years;

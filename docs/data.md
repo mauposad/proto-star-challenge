@@ -110,7 +110,7 @@ Use this file for annual experiments, so everyone works from the same cleaned da
 
 **What is deliberately not in it:** filled gaps, station adjustments, or per-city statistics such
 as climatologies and baseline counts. They depend on which years are known, so a version computed
-through 2018 would leak later years into a 1997 backtest. **Compute them inside each backtest
+through 2018 would leak later years into a 1995 backtest. **Compute them inside each backtest
 fold**, using only years up to that fold's cutoff. Partially missing years also still read low
 until screened, and temperatures in 2018 are not rounded (see the EDA findings).
 

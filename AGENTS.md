@@ -80,6 +80,7 @@ uv run python scripts/make_synthetic_data.py   # dev data if data/raw/ is empty
 
 ## Guardrails: Data
 
+- **Team data cut-off 2018-12-31.** Follow docs/honor_code.md (also in code/AGENTS.md).
 - `data/raw/` and `data/external/` are **immutable**. NEVER edit, overwrite, or delete files
   there. Write transforms that read raw and output to `data/interim/` or `data/processed/`.
 - **NEVER** commit data files, model weights (`*.joblib`, `*.pt`, `*.safetensors`), `runs/`,
@@ -89,26 +90,6 @@ uv run python scripts/make_synthetic_data.py   # dev data if data/raw/ is empty
   pipelines that aren't saved as a script).
 - When you find a new data problem, add a check in `validate.py` and a test for it.
 - New datasets: document source, license, schema, and download command in docs/data.md.
-
-## Guardrails: Challenge data rule (honor code)
-
-- Forecasts are made as of 2018-12-31. Weather used as a forecast input MUST be dated on or
-  before that day.
-- **NEVER** download, query, or use weather observations dated 2019-01-01 or later from any
-  source (NOAA, ACIS/ThreadEx, Meteostat, Open-Meteo, ERA5, weather sites).
-- **NEVER** use 2019–2025 data driven by the weather (streamflow, air quality, energy demand,
-  plant or disease data) as a forecast input. It may be used for analysis and policy only,
-  marked "Analysis only" in the data card, and forecasting code must not read it.
-- **NEVER** download the original source records (DOIs `10.1184/R1/7890488` and
-  `10.1184/R1/7961012`, or their `CMU-OSPO` Hub copies). They run past 2018. Cite them only.
-- Set an end date of 2018-12-31 or earlier on every weather download, and pass every weather
-  input through `proto_star.climate.assert_weather_cutoff`.
-- **NEVER** write or adjust `predicted_value` from memory, a web search, or an LLM, and never
-  tune a method using knowledge of how 2019–2025 turned out. Every value comes from the code's
-  model, and every modeling choice must be justified by a backtest on data through 2018.
-- **NEVER** use a pretrained model unless its card shows training data ending before 2019.
-  Declare its name, version, and cutoff in the submission README.
-- If a task seems to need post-2018 weather, stop and ask a team member.
 
 ## Guardrails: Modeling (correctness over score)
 

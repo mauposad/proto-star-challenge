@@ -29,8 +29,8 @@ still gets a prediction. `ten_year_mean` and `last_valid_year` are unchanged.
 
 ## Consequences
 
-Every score measured against the 30-year reference changed, including those in ADR 0002. Use
-these numbers from now on.
+Every score measured against the 30-year reference changed, including those in ADR 0002. These
+numbers use the old cut-offs. See ADR 0004 for the current ones.
 
 | Method | Version | 1997 | 2002 | 2007 | 2011 |
 |---|---|---|---|---|---|

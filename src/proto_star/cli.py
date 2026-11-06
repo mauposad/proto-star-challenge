@@ -82,7 +82,7 @@ def climate_backtest(
         ..., help="Local annual_indices.parquet downloaded from CMU"
     ),
     cutoff: list[int] = typer.Option(
-        [1997, 2002, 2007, 2011], help="Historical origin year; may be provided repeatedly"
+        [1980, 1995, 2011], help="Historical origin year; may be provided repeatedly"
     ),
 ) -> None:
     """Compare leakage-safe climate baselines over seven-year historical horizons."""
@@ -152,7 +152,7 @@ def climate_ensemble_submission(
     )
 
     history = annual_to_long(pd.read_parquet(annual_path))
-    backtests = backtest_baselines(history, cutoffs=[1997, 2002, 2007, 2011])
+    backtests = backtest_baselines(history, cutoffs=[1980, 1995, 2011])
     methods = select_metric_methods(backtests)
     submission = metric_ensemble_forecast(
         history,

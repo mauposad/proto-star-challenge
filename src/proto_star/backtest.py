@@ -30,7 +30,7 @@ from proto_star.climate import (
 
 Forecaster = Callable[[pd.DataFrame, int, list[int]], pd.DataFrame]
 
-DEFAULT_CUTOFFS = (1997, 2002, 2007, 2011)
+DEFAULT_CUTOFFS = (1980, 1995, 2011)  # from the kickoff deck, see docs/backtest_plan.md
 DEFAULT_HORIZON = 7
 # Forecast lead in years. 1-3 mirrors the Live Score (2019-2021), 4-7 the Final Score (2022-2025).
 WINDOWS = {"all": (1, 7), "years_1_3": (1, 3), "years_4_7": (4, 7)}

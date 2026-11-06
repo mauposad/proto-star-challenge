@@ -68,19 +68,19 @@ summarize_backtest(results, baseline="current_best")
 - `raw_score` is the official score without its floor at zero, so losing methods stay comparable.
 - Read the per-metric skill columns too. A method can help one metric and hurt another, and the
   final model can use different methods per metric.
-- `origins_beating_baseline` counts wins out of 4 test periods. A higher mean from one lucky
-  period is not a real win, and with 4 overlapping periods small gaps should count as ties.
+- `origins_beating_baseline` counts wins out of 3 test periods. A higher mean from one lucky
+  period is not a real win, and with only 3 periods small gaps should count as ties.
 - Trying many ideas and keeping the best one inflates its score, so log every attempt in
   `docs/experiments.md`, including failures.
 
-**Numbers to beat** (mean `raw_score` over 4 origins; run `scripts/compare_baselines.py` to reproduce):
+**Numbers to beat** (mean `raw_score` over 3 origins; run `scripts/compare_baselines.py` to reproduce):
 
 | Method | All years | Years 1–3 | Years 4–7 |
 |---|---|---|---|
-| `current_best` (metric ensemble) | 3.40 | 0.77 | 4.92 |
-| `ten_year_mean` | 2.48 | -0.35 | 4.15 |
+| `current_best` (metric ensemble) | 2.92 | 0.63 | 4.68 |
+| `ten_year_mean` | 1.34 | -0.62 | 2.78 |
 | `thirty_year_mean` | 0.00 | 0.00 | 0.00 |
-| `linear_trend` | -3.84 | -5.75 | -3.35 |
+| `linear_trend` | -12.76 | -10.12 | -15.15 |
 
 **When an idea wins:** move the function into `src/proto_star/` with a test, so the team can review
 it, then create the forecast with `build_submission(my_forecaster, master)`. It runs on all data

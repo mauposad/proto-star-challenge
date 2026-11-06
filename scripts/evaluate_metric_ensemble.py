@@ -12,7 +12,7 @@ from proto_star.climate import (
 )
 from proto_star.paths import RAW_DIR
 
-CUTOFFS = [1997, 2002, 2007, 2011]
+CUTOFFS = [1980, 1995, 2011]
 
 
 def main(annual_path: Path = RAW_DIR / "protostar" / "annual_indices.parquet") -> None:

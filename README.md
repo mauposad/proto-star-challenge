@@ -91,3 +91,19 @@ The final candidate selects a method per metric from rolling historical
 backtests: 10-year mean for average temperature and CDD, 30-year climatology
 for precipitation and hottest-day temperature. Never use the leaderboard or
 post-2018 weather to tune a forecast.
+
+## Method
+
+TODO: describe the forecasting method and the backtest results that justify it.
+
+## AI tools
+
+TODO: list every AI tool used and what it was used for (code only, never forecast values).
+
+## Policy idea
+
+TODO: describe the climate adaptation policy idea.
+
+## Feedback to the Ecosystem
+
+TODO: feedback for the organizers, datasets, and tools used.

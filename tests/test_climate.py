@@ -7,7 +7,9 @@ from proto_star.climate import (
     annual_to_long,
     backtest_baselines,
     baseline_forecast,
+    metric_ensemble_forecast,
     official_score,
+    select_metric_methods,
     validate_submission,
 )
 
@@ -82,3 +84,30 @@ def test_backtest_and_submission_validation() -> None:
     validate_submission(forecast, ["A", "B"])
     with pytest.raises(ClimateSubmissionError, match="columns"):
         validate_submission(forecast.drop(columns="metric"), ["A", "B"])
+
+
+def test_metric_selection_and_ensemble_forecast() -> None:
+    history = annual_to_long(_annual())
+    results = pd.DataFrame(
+        {
+            "method": ["ten_year_mean", "thirty_year_mean"],
+            "annual_avg_temp_skill": [0.2, 0.1],
+            "total_precip_in_skill": [-0.1, 0.0],
+            "hottest_day_temp_skill": [0.0, 0.1],
+            "cdd_skill": [0.3, 0.2],
+        }
+    )
+    methods = select_metric_methods(results)
+    assert methods == {
+        "annual_avg_temp": "ten_year_mean",
+        "total_precip_in": "thirty_year_mean",
+        "hottest_day_temp": "thirty_year_mean",
+        "cdd": "ten_year_mean",
+    }
+    forecast = metric_ensemble_forecast(
+        history,
+        cutoff_year=2017,
+        forecast_years=[2019],
+        methods_by_metric=methods,
+    )
+    assert len(forecast) == 8

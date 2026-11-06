@@ -54,6 +54,28 @@ streamflow, vegetation or disease observations) to a forecasting feature set.
 Static, non-weather-responsive data may be used only after its provenance,
 license, and join logic are documented here.
 
+### NOAA GHCN-Daily station inventory (static metadata)
+
+- **Source / URL:** `ghcnd-stations.txt` from NOAA NCEI GHCN-Daily:
+  `https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt`.
+- **Download:** `uv run python scripts/download_ghcn_station_metadata.py`.
+- **License:** public-domain U.S. government work.
+- **Content:** station ID, name, latitude, longitude, elevation, state, and
+  network flags; no daily or annual weather observations are used.
+- **Use:** joined only to the CMU `city_info.ID` key by
+  `scripts/build_station_metadata_report.py`, producing a 210-city
+  interoperability report. It is not read by the forecasting code.
+- **Known limitation:** current station metadata can change administratively;
+  the stored local artifact and checksum below are the version used here.
+
+## Input artifact checksums
+
+| Local artifact | SHA-256 |
+|---|---|
+| `data/raw/protostar/annual_indices.parquet` | `8c772bb8a946409380acfd5387d9ea9cb84ddcf4a4187d40245e0b0f3a2054b0` |
+| `data/raw/protostar/city_info.parquet` | `76c146ec1e474af1e2268f9620d7602e66a9331e45311cce3a643bc2681edb4b` |
+| `data/external/noaa_ghcn_stations/ghcnd-stations.txt` | `437ee87f0343bcad408a492cf7a02163fb69255364c541b4006d5d76055d0dc3` |
+
 ## Onboarding real data
 
 1. Write `scripts/download_data.py` that saves to `data/raw/<dataset>/` (use

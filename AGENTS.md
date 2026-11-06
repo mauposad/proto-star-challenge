@@ -79,6 +79,7 @@ uv run python scripts/make_synthetic_data.py   # dev data if data/raw/ is empty
 
 ## Guardrails: Data
 
+- **Team data cut-off 2018-12-31.** Follow docs/honor_code.md (also in code/AGENTS.md).
 - `data/raw/` and `data/external/` are **immutable**. NEVER edit, overwrite, or delete files
   there. Write transforms that read raw and output to `data/interim/` or `data/processed/`.
 - **NEVER** commit data files, model weights (`*.joblib`, `*.pt`, `*.safetensors`), `runs/`,

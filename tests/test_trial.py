@@ -119,6 +119,7 @@ def test_package_has_the_layout_the_challenge_asks_for(config_path: Path, tmp_pa
         "submission.csv",
         "README.md",
         "code/reproduce.py",
+        "code/check_submission.py",
         "code/requirements.txt",
         "code/trial.yaml",
         "code/src/proto_star/backtest.py",

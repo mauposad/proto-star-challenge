@@ -78,6 +78,8 @@ def _copy_code(code_dir: Path, config_path: Path) -> None:
     for name in ("download_protostar_data.py", "build_master_dataset.py"):
         shutil.copyfile(PROJECT_ROOT / "scripts" / name, scripts / name)
     shutil.copyfile(PROJECT_ROOT / "AGENTS.md", code_dir / "AGENTS.md")
+    check = "check_submission.py"
+    shutil.copyfile(PROJECT_ROOT / "scripts" / check, code_dir / check)
     shutil.copyfile(config_path, code_dir / "trial.yaml")
     (code_dir / "reproduce.py").write_text(REPRODUCE_SCRIPT)
     pins = [f"{pkg}=={metadata.version(pkg)}" for pkg in REQUIREMENT_PACKAGES]

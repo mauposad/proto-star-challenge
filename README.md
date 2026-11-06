@@ -29,7 +29,7 @@ Optional extras: `uv sync --extra hf` (torch + transformers), `uv sync --extra g
 ```
 configs/            One YAML per experiment. The config *is* the experiment.
 data/               Git-ignored. raw/ (immutable) -> interim/ -> processed/. See docs/data.md
-docs/               Data card, experiment log, design decisions (ADRs)
+docs/               Data card, experiment log, trial write-ups, design decisions (ADRs)
 notebooks/          Exploration only. Naming: NN_initials_topic.ipynb
 papers/             Research papers we reproduce: paper cards, index of architectures and scores
 runs/               Git-ignored. One folder per training run (model, metrics, config, git sha)
@@ -91,6 +91,15 @@ The final candidate selects a method per metric from rolling historical
 backtests: 10-year mean for average temperature and CDD, 30-year climatology
 for precipitation and hottest-day temperature. Never use the leaderboard or
 post-2018 weather to tune a forecast.
+
+### Trial -> submission, step by step
+
+Full map of where everything lives: [docs/workflow.md](docs/workflow.md).
+
+```bash
+uv run proto-star climate-trial configs/<initials>_<name>.yaml --record   # backtest + write-up
+uv run proto-star climate-package configs/<initials>_<name>.yaml          # submission folder
+```
 
 ## Method
 

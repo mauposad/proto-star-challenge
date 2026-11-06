@@ -5,6 +5,8 @@ from pathlib import Path
 import typer
 from dotenv import load_dotenv
 
+from proto_star.climate import DEFAULT_CUTOFFS
+
 app = typer.Typer(no_args_is_help=True, help="proto-star training & submission tools.")
 load_dotenv()  # picks up HF_TOKEN etc. from .env
 
@@ -82,7 +84,7 @@ def climate_backtest(
         ..., help="Local annual_indices.parquet downloaded from CMU"
     ),
     cutoff: list[int] = typer.Option(
-        [1980, 1995, 2011], help="Historical origin year; may be provided repeatedly"
+        list(DEFAULT_CUTOFFS), help="Historical origin year; may be provided repeatedly"
     ),
 ) -> None:
     """Compare leakage-safe climate baselines over seven-year historical horizons."""
@@ -93,6 +95,34 @@ def climate_backtest(
     history = annual_to_long(pd.read_parquet(annual_path))
     results = backtest_baselines(history, cutoffs=cutoff)
     typer.echo(results.to_csv(index=False))
+
+
+@app.command("climate-trial")
+def climate_trial(
+    config: Path = typer.Argument(..., help="Trial config, e.g. configs/mp_baselines_round1.yaml"),
+    record: bool = typer.Option(False, help="Also write the committed note docs/trials/<name>.md"),
+) -> None:
+    """Backtest the forecasters listed in a trial config and save a record of what was used."""
+    from proto_star.trial import run_trial
+
+    run_dir = run_trial(config, record=record)
+    typer.echo((run_dir / "summary.md").read_text())
+    typer.echo(f"Saved to {run_dir}")
+
+
+@app.command("climate-package")
+def climate_package(
+    config: Path = typer.Argument(..., help="Trial config naming the forecaster to submit"),
+    forecaster: str = typer.Option(None, help="Override the config's `submit` forecaster"),
+) -> None:
+    """Build the Hugging Face submission folder (submission.csv, README, code/, data/)."""
+    from proto_star.submission_package import build_package, open_placeholders, verify_package
+
+    package = build_package(config, forecaster=forecaster)
+    verify_package(package)
+    typer.echo(f"Built {package}")
+    for item in open_placeholders(package):
+        typer.echo(f"TODO before upload: {item}")
 
 
 @app.command("climate-submission")
@@ -152,7 +182,7 @@ def climate_ensemble_submission(
     )
 
     history = annual_to_long(pd.read_parquet(annual_path))
-    backtests = backtest_baselines(history, cutoffs=[1980, 1995, 2011])
+    backtests = backtest_baselines(history, cutoffs=DEFAULT_CUTOFFS)
     methods = select_metric_methods(backtests)
     submission = metric_ensemble_forecast(
         history,

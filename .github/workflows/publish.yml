@@ -1,0 +1,90 @@
+name: Publish submission
+
+# Manual only: a person decides when a package goes to the Hub (AGENTS.md: no agent uploads).
+# Builds the package from a trial config, checks it, and uploads it to your HF dataset repo.
+# Needs the repository secret HF_TOKEN (write access to REPO_ID).
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: Trial config naming the forecaster to submit (its `submit` key)
+        default: configs/mp_baselines_round1.yaml
+      forecaster:
+        description: Optional override of the config's `submit` forecaster
+        default: ""
+      repo_id:
+        description: Hugging Face dataset repo to upload to
+        default: MekkoMau/protostar-climate-MKDir
+      upload:
+        description: Upload to the Hub (untick for a dry run that only builds and checks)
+        type: boolean
+        default: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # data/ is git-ignored, so rebuild it from the public CMU dataset (cut-off 2018-12-31).
+      - name: Download raw data and build the master table
+        run: |
+          uv run python scripts/download_protostar_data.py
+          uv run python scripts/build_master_dataset.py
+
+      - name: Build and reproduce the package
+        id: build
+        env:
+          CONFIG: ${{ inputs.config }}
+          FORECASTER: ${{ inputs.forecaster }}
+        run: |
+          args=("$CONFIG")
+          if [ -n "$FORECASTER" ]; then args+=(--forecaster "$FORECASTER"); fi
+          uv run proto-star climate-package "${args[@]}" | tee build.log
+          package=$(sed -n 's/^Built //p' build.log)
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+          # Unfilled <...> placeholders in the READMEs must not reach the Hub.
+          if grep -q '^TODO before upload' build.log; then
+            echo "::error::Package README still has placeholders (see log)"; exit 1
+          fi
+
+      - name: Check submission.csv (same checks as the challenge Space)
+        env:
+          PACKAGE: ${{ steps.build.outputs.package }}
+        run: uv run python "$PACKAGE/code/check_submission.py" "$PACKAGE/submission.csv"
+
+      - name: Keep the package as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: submission-package
+          path: ${{ steps.build.outputs.package }}
+
+      - name: Upload to Hugging Face
+        if: ${{ inputs.upload }}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          REPO_ID: ${{ inputs.repo_id }}
+          PACKAGE: ${{ steps.build.outputs.package }}
+        run: |
+          uv run python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          api.create_repo(os.environ["REPO_ID"], repo_type="dataset", exist_ok=True)
+          info = api.upload_folder(
+              folder_path=os.environ["PACKAGE"],
+              repo_id=os.environ["REPO_ID"],
+              repo_type="dataset",
+              commit_message=f"Submission from GitHub {os.environ['GITHUB_SHA'][:7]}",
+          )
+          print("Commit:", info.oid)
+          print("URL:", info.commit_url)
+          PY

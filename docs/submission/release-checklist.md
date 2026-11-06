@@ -12,19 +12,21 @@
 
 - [ ] Run `uv sync`, `pytest -q`, and the project quality checks from a clean
   environment.
-- [ ] Run `scripts/evaluate_metric_ensemble.py`; confirm the selected mapping
-  remains temperature/CDD = ten-year mean and precipitation/hottest-day =
-  thirty-year climatology unless a documented later experiment beats it.
-- [ ] Generate `submissions/protostar_metric_ensemble.csv` and confirm 5,880
-  rows with the official checker in the copied submission template.
+- [ ] Run the trial (`uv run proto-star climate-trial configs/<trial>.yaml --record`) and
+  confirm the `submit` forecaster in the config is the one the validation results support.
+- [ ] Build the folder with `uv run proto-star climate-package configs/<trial>.yaml`. It
+  checks that `code/` and `data/` rebuild `submission.csv`, and lists what is left to fill in.
+- [ ] Run the official `code/check_submission.py` from the copied submission template on
+  the generated `submission.csv` (5,880 rows).
 - [ ] Confirm forecasting code reads no weather-responsive values after
   2018-12-31 and every external source is listed in the dataset card.
 
 ## Hugging Face dataset
 
 - [ ] Copy the official submission template into the team's public dataset.
-- [ ] Add `submission.csv`, `README.md`, `code/`, and a `data/README.md`
-  copied from `docs/submission/data-card-template.md`.
+- [ ] Upload the contents of the generated `submissions/<stamp>_<trial>/` folder
+  (`submission.csv`, `README.md`, `code/`, `data/`) after filling in every
+  `TODO before upload` line that `climate-package` printed.
 - [ ] Include the method, policy, ecosystem feedback, limitations, AI-tool
   disclosure, source licenses, cutoff, and checksums.
 - [ ] Commit/push the public dataset, record the commit hash, then paste its

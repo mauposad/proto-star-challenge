@@ -1,0 +1,17 @@
+# Team facts that go into every generated submission README (`proto-star climate-package`).
+# Edit here, not in the generated README. Use TBD for anything not yet known.
+team_name: MKDir
+members:
+  - name: Mauricio Posadas
+    hf_username: "@MekkoMau"
+    affiliation: Carnegie Mellon University
+  - name: Deen Ojo
+    hf_username: "@DeenOjo"
+    affiliation: Carnegie Mellon University
+  - name: Luke Corbett
+    hf_username: "@corbe19"
+    affiliation: Carnegie Mellon University
+ai_tools: Claude Code (mostly Opus and Sonnet models) and Warp.
+ai_work: Wrote and refactored code, tests and documentation drafts under the rules in AGENTS.md.
+human_review: >-
+  The team reviewed the agents' output and workflow, and validated the results.

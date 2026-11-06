@@ -4,7 +4,7 @@ Plan only. Paper IDs refer to [literature/README.md](literature/README.md). Ever
 evaluated with the [backtest plan](backtest_plan.md) and must follow the
 [honor code](honor_code.md).
 
-1. Baselines per metric: 30-year mean, 10-year mean, 15-year mean, linear trend, hinge fit
+1. Done (trial `baselines_round1`, [write-up](trials/baselines_round1.md)). Baselines per metric: 30-year mean, 10-year mean, 15-year mean, linear trend, hinge fit
    (P01 to P04). Add median versions of each window (P09).
 2. Backtest harness with the cut-offs in the backtest plan (P10, P12). Built: `proto_star.backtest`,
    usage in `notebooks/README.md`.

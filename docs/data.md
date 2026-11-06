@@ -31,8 +31,17 @@ data (`uv sync --extra geo`).
 - **Source / URL:** `CMU-OSPO/protostar-climate-train-to-2018` on Hugging Face;
   original records: Lai & Dzombak (2019), DOI
   [10.1184/R1/7890488.v6](https://doi.org/10.1184/R1/7890488.v6).
-- **Download:** `uv run python scripts/download_protostar_data.py`. This deliberately
-  downloads only `annual_indices` and `city_info`, not the 10M-row daily table.
+- **Download:** `uv run python scripts/download_protostar_data.py`. Downloads
+  `annual_indices`, `city_info`, `daily` (~10M rows, ~50 MB parquet) and
+  `coverage_and_stations`. Tables already present are left untouched (only missing ones are
+  written), and every table is rejected if it has observations after 2018.
+- **Files:** `data/raw/protostar/<table>.parquet`.
+  - `daily`: `ID`, `Name`, `Date`, `tmax`/`tmin` (°F), `prcp` (in). This is a complete calendar,
+    and missing values are NaN.
+  - `coverage_and_stations`: one row per city-year with `Days Both` (days with both tmax and tmin
+    observed), `Station Segment` (1-based station thread in use) and `Station Changes`
+    (switches that year).
+  - Loaders are in `proto_star.data.protostar`.
 - **License:** CC0-1.0.
 - **Temporal / spatial coverage:** 210 U.S. cities, historical values through
   2018-12-31 only.
@@ -44,6 +53,11 @@ data (`uv sync --extra geo`).
   only when its relevant missing-day column(s) are at most 10. Threaded station
   changes can create discontinuities. Stations are mostly airports and do not
   support neighborhood-scale heat claims.
+  EDA in `notebooks/0[1-3]_agent_*.ipynb` found the following:
+  - In years with no data, max/min columns are ±inf, and `ToT Prcp`/`Wet Days` are 0 instead of NaN.
+  - Station switches shift temperature metrics by about 0.5 °F on average.
+  - 30 cities switch station within 1989-2018.
+  - Huntsville has almost no data after 1960.
 
 #### Leakage policy
 

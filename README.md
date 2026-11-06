@@ -31,6 +31,7 @@ configs/            One YAML per experiment. The config *is* the experiment.
 data/               Git-ignored. raw/ (immutable) -> interim/ -> processed/. See docs/data.md
 docs/               Data card, experiment log, design decisions (ADRs)
 notebooks/          Exploration only. Naming: NN_initials_topic.ipynb
+papers/             Research papers we reproduce: paper cards, index of architectures and scores
 runs/               Git-ignored. One folder per training run (model, metrics, config, git sha)
 scripts/            One-off utilities (data download, synthetic data, demos)
 src/proto_star/     The package. Reusable code lives here, not in notebooks

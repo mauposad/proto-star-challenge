@@ -9,8 +9,8 @@ Keep this file under 200 lines (CI enforces it).
 Forecasting model for an extreme-weather challenge (CMU OSPO x Hugging Face), scored by a
 leaderboard submission. Python 3.12 package `proto_star` in `src/`, managed with **uv**.
 Pipeline: YAML config → load → validate → features → time split → fit → metrics → `runs/`,
-then `predict` → validated CSV in `submissions/`. Real dataset and metric: see docs/data.md
-(may still be TBD; synthetic data is used until then).
+then `predict` → validated CSV in `submissions/`. Real dataset and metric: see docs/data.md.
+The challenge workflow lives in `src/proto_star/climate.py` and the `climate-*` CLI commands.
 
 ## Commands
 
@@ -35,6 +35,7 @@ uv run python scripts/make_synthetic_data.py   # dev data if data/raw/ is empty
 | Features | `src/proto_star/data/features.py` |
 | New model | register in `src/proto_star/models/registry.py` (sklearn fit/predict API) |
 | Metric | `src/proto_star/evaluate.py` |
+| Scoring a climate forecast | `src/proto_star/backtest.py`, usage in `notebooks/README.md` |
 | Hyperparameters / experiment | new file `configs/<initials>_<desc>.yaml` |
 | Paths | `src/proto_star/paths.py`. Never hard-code paths |
 | Tests | `tests/`, mirroring the module tested |
@@ -79,6 +80,7 @@ uv run python scripts/make_synthetic_data.py   # dev data if data/raw/ is empty
 
 ## Guardrails: Data
 
+- **Team data cut-off 2018-12-31.** Follow docs/honor_code.md (also in code/AGENTS.md).
 - `data/raw/` and `data/external/` are **immutable**. NEVER edit, overwrite, or delete files
   there. Write transforms that read raw and output to `data/interim/` or `data/processed/`.
 - **NEVER** commit data files, model weights (`*.joblib`, `*.pt`, `*.safetensors`), `runs/`,

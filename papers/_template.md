@@ -56,10 +56,9 @@ Same backtest origins as the baseline. Fill these in only from real runs.
 
 | Origin | Score | `ten_year_mean` | avg_temp skill | precip skill | hottest_day skill | cdd skill |
 |---|---|---|---|---|---|---|
-| 1997 | TBD | 1.09 | | | | |
-| 2002 | TBD | 3.14 | | | | |
-| 2007 | TBD | 1.13 | | | | |
-| 2011 | TBD | 5.94 | | | | |
+| 1980 | TBD | -2.53 | | | | |
+| 1995 | TBD | 1.39 | | | | |
+| 2011 | TBD | 5.16 | | | | |
 
 Command, commit and run dir:
 

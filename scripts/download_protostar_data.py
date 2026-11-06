@@ -11,11 +11,12 @@ from pathlib import Path
 import pandas as pd
 from datasets import load_dataset
 
-from proto_star.climate import FORECAST_CUTOFF, ClimateDataError, annual_to_long
+from proto_star.climate import FORECAST_CUTOFF, annual_to_long, assert_weather_cutoff
 from proto_star.paths import RAW_DIR
 
 REPO = "CMU-OSPO/protostar-climate-train-to-2018"
 TABLES = ("annual_indices", "city_info", "daily", "coverage_and_stations")
+STATIC_TABLES = ("city_info",)  # station metadata, no observation dates
 
 
 def _load_hub_table(name: str) -> pd.DataFrame:
@@ -27,14 +28,8 @@ def check_cutoff(name: str, table: pd.DataFrame, *, cutoff_year: int = FORECAST_
     if name == "annual_indices":
         annual_to_long(table, cutoff_year=cutoff_year)
         return
-    if "Year" in table.columns:
-        last = int(pd.to_numeric(table["Year"]).max())
-    elif "Date" in table.columns:
-        last = int(pd.to_datetime(table["Date"]).max().year)
-    else:
-        return  # static metadata (city_info) has no observation dates
-    if last > cutoff_year:
-        raise ClimateDataError(f"{name} contains year {last}, after allowed cutoff {cutoff_year}")
+    if name not in STATIC_TABLES:
+        assert_weather_cutoff(table, name=name, cutoff_year=cutoff_year)
 
 
 def download_missing(

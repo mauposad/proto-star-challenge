@@ -55,6 +55,7 @@ data (`uv sync --extra geo`).
   support neighborhood-scale heat claims.
   EDA in `notebooks/0[1-3]_agent_*.ipynb` found the following:
   - In years with no data, max/min columns are ±inf, and `ToT Prcp`/`Wet Days` are 0 instead of NaN.
+    `Warm Days`, `Cold Days`, `Warm Nights`, `Cold Nights` and `Max 5-day P` have the same problem.
   - Station switches shift temperature metrics by about 0.5 °F on average.
   - 30 cities switch station within 1989-2018.
   - Huntsville has almost no data after 1960.
@@ -62,11 +63,80 @@ data (`uv sync --extra geo`).
 #### Leakage policy
 
 Forecasting code may only use weather observations dated on or before
-2018-12-31. The download script and `annual_to_long` reject later years. Do not
+2018-12-31. The download script, the `proto_star.data.protostar` loaders and
+`annual_to_long` reject later years through `assert_weather_cutoff`; pass any
+new weather input through it too. Do not download the original source records
+(the DOIs above or their `CMU-OSPO` Hub copies), which run to 2023. Do not
 add 2019–2025 weather-responsive data (weather, energy demand, air quality,
 streamflow, vegetation or disease observations) to a forecasting feature set.
 Static, non-weather-responsive data may be used only after its provenance,
 license, and join logic are documented here.
+
+### Annual master table (the team's shared file)
+
+Use this file for annual experiments, so everyone works from the same cleaned data.
+
+- **Build:** `uv run python scripts/download_protostar_data.py`, then
+  `uv run python scripts/build_master_dataset.py`.
+- **Files:** `data/processed/protostar/annual_master.parquet`, plus
+  `annual_master.manifest.json` with source checksums and cleaning counts.
+- **Load:** `from proto_star.data.master import load_master`.
+- **Confirm you have the team's table:** the build prints `content_hash`, which must be
+  `99128065d035cf531fe13c214e514b6bb73927ae90a80a9b903949d13abb04d1`. If the cleaning code
+  changes on purpose, update this hash in the same PR and tell the team.
+- **Shape:** 28,052 rows and 37 columns, one row per city and year, 1851–2018. No rows are
+  dropped, so **filter on a `valid_*` column before using a metric**.
+- **Compatibility:** `annual_to_long` gives identical results on this file and on the raw table,
+  and the build fails otherwise.
+
+**What changed from `annual_indices`.** Values became blank only where they cannot be measurements:
+
+| Change | Columns | Cells |
+|---|---|---|
+| `±inf` to blank | `Max Tmax`, `Min Tmax`, `Max Tmin`, `Min Tmin`, `Max 1-day P` | 5,648 |
+| Fake precipitation values to blank, in years with no precipitation data | `ToT Prcp`, `Wet Days`, `Max 5-day P` | 2,796 |
+| Fake zeros to blank, in years with no data for that variable | `Warm Days`, `Cold Days`, `Warm Nights`, `Cold Nights` | 4,716 |
+
+**What was added:**
+
+| Column | Meaning |
+|---|---|
+| `valid_annual_avg_temp`, `valid_total_precip_in`, `valid_hottest_day_temp`, `valid_cdd` | The value passes the official missing-days rule |
+| `Days Both`, `Station Segment`, `Station Changes` | Joined from `coverage_and_stations` |
+| `cdd_days_short` | More than 10 days lack both tmax and tmin. 348 rows are still `valid_cdd`, because the official rule checks each variable separately |
+| `years_since_switch` | Years since the latest station change at or before this row. Blank before the first change |
+| `region` | Approximate region from coordinates (`assign_region`) |
+| `days_tmax_below_tmin`, `days_extreme_cold`, `days_extreme_precip` | Counts of suspect days in the year (below -50 °F, over 10 in). These days are kept, not corrected |
+
+**What is deliberately not in it:** filled gaps, station adjustments, or per-city statistics such
+as climatologies and baseline counts. They depend on which years are known, so a version computed
+through 2018 would leak later years into a 1995 backtest. **Compute them inside each backtest
+fold**, using only years up to that fold's cutoff. Partially missing years also still read low
+until screened, and temperatures in 2018 are not rounded (see the EDA findings).
+
+### NOAA GHCN-Daily station inventory (static metadata)
+
+- **Source / URL:** `ghcnd-stations.txt` from NOAA NCEI GHCN-Daily:
+  `https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt`.
+- **Download:** `uv run python scripts/download_ghcn_station_metadata.py`.
+- **License:** public-domain U.S. government work.
+- **Content:** station ID, name, latitude, longitude, elevation, state, and
+  network flags; no daily or annual weather observations are used.
+- **Use:** joined only to the CMU `city_info.ID` key by
+  `scripts/build_station_metadata_report.py`, producing a 210-city
+  interoperability report. It is not read by the forecasting code.
+- **Known limitation:** current station metadata can change administratively;
+  the stored local artifact and checksum below are the version used here.
+
+## Input artifact checksums
+
+| Local artifact | SHA-256 |
+|---|---|
+| `data/raw/protostar/annual_indices.parquet` | `8c772bb8a946409380acfd5387d9ea9cb84ddcf4a4187d40245e0b0f3a2054b0` |
+| `data/raw/protostar/city_info.parquet` | `76c146ec1e474af1e2268f9620d7602e66a9331e45311cce3a643bc2681edb4b` |
+| `data/raw/protostar/coverage_and_stations.parquet` | `3aad824b2a807bf520963c0599bad27d6dd8a0e894005ccbb57c1462dbd87027` |
+| `data/raw/protostar/daily.parquet` | `e1f403ceb031827474fb0b6b5432c2c91038e2f3f87ac12a322e75d19e2288c7` |
+| `data/external/noaa_ghcn_stations/ghcnd-stations.txt` | `437ee87f0343bcad408a492cf7a02163fb69255364c541b4006d5d76055d0dc3` |
 
 ## Onboarding real data
 

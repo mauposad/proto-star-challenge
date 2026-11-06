@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from proto_star.climate import assert_weather_cutoff
 from proto_star.paths import RAW_DIR
 
 PROTOSTAR_DIR = RAW_DIR / "protostar"
@@ -44,7 +45,9 @@ def _path(name: str, data_dir: Path | None) -> Path:
 
 def load_annual(data_dir: Path | None = None) -> pd.DataFrame:
     """Read ``annual_indices`` unchanged (one row per city and year)."""
-    return pd.read_parquet(_path("annual_indices", data_dir))
+    annual = pd.read_parquet(_path("annual_indices", data_dir))
+    assert_weather_cutoff(annual, name="annual_indices")
+    return annual
 
 
 def load_city_info(data_dir: Path | None = None) -> pd.DataFrame:
@@ -62,7 +65,9 @@ def load_coverage(data_dir: Path | None = None) -> pd.DataFrame:
     is the 1-based index of the station thread in use, and ``Station Changes`` is
     the number of station switches during that year.
     """
-    return pd.read_parquet(_path("coverage_and_stations", data_dir))
+    coverage = pd.read_parquet(_path("coverage_and_stations", data_dir))
+    assert_weather_cutoff(coverage, name="coverage_and_stations")
+    return coverage
 
 
 def load_daily(
@@ -91,6 +96,7 @@ def load_daily(
     )
     daily["ID"] = daily["ID"].astype("category")
     daily["Date"] = pd.to_datetime(daily["Date"])
+    assert_weather_cutoff(daily, name="daily")
     for column in columns:
         daily[column] = daily[column].astype("float32")
     return daily

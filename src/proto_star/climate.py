@@ -23,6 +23,13 @@ SUBMISSION_COLUMNS = ["city_id", "year", "metric", "predicted_value"]
 FORECAST_CUTOFF = 2018
 FORECAST_YEARS = tuple(range(2019, 2026))
 MAX_MISSING_DAYS = 10
+BASELINE_WINDOW_YEARS = 30
+BASELINE_METHODS = (
+    "last_valid_year",
+    "ten_year_mean",
+    "thirty_year_mean",
+    "linear_trend",
+)
 
 
 class ClimateDataError(ValueError):
@@ -51,6 +58,42 @@ _METRIC_SPECS: dict[str, tuple[str, tuple[str, ...]]] = {
 }
 
 
+def assert_weather_cutoff(
+    table: pd.DataFrame, *, name: str, cutoff_year: int = FORECAST_CUTOFF
+) -> None:
+    """Stop if a weather table holds observations after the challenge cutoff.
+
+    Run every weather input through this, including external sources.  A table with
+    no recognizable date column fails rather than passes: static metadata should
+    simply not be sent here, so an unchecked weather table cannot slip through.
+    """
+    columns = [column for column in ("Year", "year", "Date", "date") if column in table.columns]
+    if not columns:
+        raise ClimateDataError(f"{name} has no Year or Date column to check against the cutoff")
+    for column in columns:
+        if column.lower() == "year":
+            years = pd.to_numeric(table[column], errors="coerce")
+        else:
+            years = pd.to_datetime(table[column], errors="coerce").dt.year
+        if (years.isna() & table[column].notna()).any():
+            raise ClimateDataError(f"{name} has unparseable values in column {column!r}")
+        last = years.max()
+        if pd.notna(last) and int(last) > cutoff_year:
+            raise ClimateDataError(
+                f"{name} contains year {int(last)}, after allowed cutoff {cutoff_year}"
+            )
+
+
+def metric_valid_mask(annual: pd.DataFrame, metric: str) -> pd.Series:
+    """Rows of ``annual`` whose ``metric`` passes the organizer's missing-days rule."""
+    value_column, missing_columns = _METRIC_SPECS[metric]
+    values = pd.to_numeric(annual[value_column], errors="coerce")
+    valid = values.notna() & np.isfinite(values)
+    for column in missing_columns:
+        valid &= pd.to_numeric(annual[column], errors="coerce").le(MAX_MISSING_DAYS)
+    return valid
+
+
 def annual_to_long(annual: pd.DataFrame, *, cutoff_year: int = FORECAST_CUTOFF) -> pd.DataFrame:
     """Melt annual indices to one quality-screened city/year/metric value per row.
 
@@ -75,13 +118,9 @@ def annual_to_long(annual: pd.DataFrame, *, cutoff_year: int = FORECAST_CUTOFF) 
         )
 
     frames: list[pd.DataFrame] = []
-    for metric, (value_column, missing_columns) in _METRIC_SPECS.items():
+    for metric, (value_column, _) in _METRIC_SPECS.items():
         values = pd.to_numeric(annual[value_column], errors="coerce")
-        complete = pd.Series(True, index=annual.index)
-        for column in missing_columns:
-            missing_days = pd.to_numeric(annual[column], errors="coerce")
-            complete &= missing_days.le(MAX_MISSING_DAYS)
-        valid = complete & values.notna() & np.isfinite(values)
+        valid = metric_valid_mask(annual, metric)
         frames.append(
             pd.DataFrame(
                 {
@@ -125,17 +164,24 @@ def validate_climate_history(history: pd.DataFrame, *, max_year: int | None = No
 
 
 def _predict_group(
-    group: pd.DataFrame, years: np.ndarray, method: str, fallback: float
+    group: pd.DataFrame, years: np.ndarray, method: str, fallback: float, cutoff_year: int
 ) -> np.ndarray:
-    recent = group.sort_values("year").tail(30)
-    values = recent["actual_value"].to_numpy(dtype=float)
-    observed_years = recent["year"].to_numpy(dtype=float)
-    if values.size == 0:
+    ordered = group.sort_values("year")
+    all_values = ordered["actual_value"].to_numpy(dtype=float)
+    if all_values.size == 0:
         return np.full(len(years), fallback)
     if method == "last_valid_year":
-        return np.full(len(years), values[-1])
+        return np.full(len(years), all_values[-1])
     if method == "ten_year_mean":
-        return np.full(len(years), values[-10:].mean())
+        return np.full(len(years), all_values[-10:].mean())
+
+    # The organizers' 30-year baselines cover calendar years (1989-2018 for the real
+    # forecast), not the last 30 valid years. Sparse cities must not reach back decades.
+    recent = ordered.loc[ordered["year"] > cutoff_year - BASELINE_WINDOW_YEARS]
+    if recent.empty:
+        recent = ordered.tail(BASELINE_WINDOW_YEARS)
+    values = recent["actual_value"].to_numpy(dtype=float)
+    observed_years = recent["year"].to_numpy(dtype=float)
     if method == "thirty_year_mean":
         return np.full(len(years), values.mean())
     if method == "linear_trend":
@@ -168,7 +214,7 @@ def baseline_forecast(
         city_key = str(city_id)
         metric_key = str(metric)
         fallback = float(fallbacks[metric_key])
-        predictions = _predict_group(group, years, method, fallback)
+        predictions = _predict_group(group, years, method, fallback, cutoff_year)
         outputs.append(
             pd.DataFrame(
                 {
@@ -237,12 +283,7 @@ def backtest_baselines(
     *,
     cutoffs: Iterable[int],
     horizon: int = 7,
-    methods: Iterable[str] = (
-        "last_valid_year",
-        "ten_year_mean",
-        "thirty_year_mean",
-        "linear_trend",
-    ),
+    methods: Iterable[str] = BASELINE_METHODS,
 ) -> pd.DataFrame:
     """Evaluate methods at multiple historical origins using challenge scoring."""
     rows: list[dict[str, float | int | str]] = []
@@ -267,6 +308,81 @@ def backtest_baselines(
                 row[f"{metric}_mae"] = score.mae[metric]
                 row[f"{metric}_skill"] = score.skill[metric]
             rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def select_metric_methods(backtest_results: pd.DataFrame) -> dict[str, str]:
+    """Select the highest mean-skill baseline for each official metric."""
+    if "method" not in backtest_results.columns:
+        raise ClimateDataError("backtest results are missing the method column")
+
+    selected: dict[str, str] = {}
+    for metric in METRICS:
+        skill_column = f"{metric}_skill"
+        if skill_column not in backtest_results.columns:
+            raise ClimateDataError(f"backtest results are missing {skill_column!r}")
+        mean_skill = backtest_results.groupby("method")[skill_column].mean()
+        if mean_skill.empty:
+            raise ClimateDataError("backtest results contain no methods")
+        best_skill = float(mean_skill.max())
+        selected[metric] = sorted(mean_skill[mean_skill == best_skill].index.astype(str))[0]
+    return selected
+
+
+def metric_ensemble_forecast(
+    history: pd.DataFrame,
+    *,
+    cutoff_year: int,
+    forecast_years: Iterable[int],
+    methods_by_metric: dict[str, str],
+) -> pd.DataFrame:
+    """Forecast each metric with its independently backtest-selected method."""
+    if set(methods_by_metric) != set(METRICS):
+        raise ValueError(f"methods_by_metric must contain exactly {list(METRICS)}")
+
+    forecasts = []
+    for metric in METRICS:
+        forecast = baseline_forecast(
+            history,
+            cutoff_year=cutoff_year,
+            forecast_years=forecast_years,
+            method=methods_by_metric[metric],
+        )
+        forecasts.append(forecast.loc[forecast["metric"] == metric])
+    return pd.concat(forecasts, ignore_index=True)
+
+
+def backtest_metric_ensemble(
+    history: pd.DataFrame,
+    *,
+    cutoffs: Iterable[int],
+    methods_by_metric: dict[str, str],
+    horizon: int = 7,
+) -> pd.DataFrame:
+    """Score one metric-specific ensemble at each historical forecast origin."""
+    rows: list[dict[str, float | int]] = []
+    for cutoff in cutoffs:
+        years = range(cutoff + 1, cutoff + horizon + 1)
+        truth = history.loc[history["year"].isin(years)]
+        reference = baseline_forecast(
+            history, cutoff_year=cutoff, forecast_years=years, method="thirty_year_mean"
+        )
+        forecast = metric_ensemble_forecast(
+            history,
+            cutoff_year=cutoff,
+            forecast_years=years,
+            methods_by_metric=methods_by_metric,
+        )
+        score = official_score(forecast, truth, reference)
+        row: dict[str, float | int] = {
+            "cutoff_year": cutoff,
+            "score": score.score,
+            "n_rows": score.n_rows,
+        }
+        for metric in METRICS:
+            row[f"{metric}_mae"] = score.mae[metric]
+            row[f"{metric}_skill"] = score.skill[metric]
+        rows.append(row)
     return pd.DataFrame(rows)
 
 

@@ -55,6 +55,10 @@ documentation and provenance; it must not become a second codebase.
 | Every result, including failures | a row in `docs/experiments.md` **and** the index above |
 | Decision to adopt a paper's method for submission | an ADR in `docs/decisions/` |
 
+## Finding papers
+
+See [reading-list.md](reading-list.md) for the shortlist and experiment ideas.
+
 ## The paper PDFs
 
 Do **not** commit PDFs by default. Most papers are copyrighted, and the pre-commit hook rejects
@@ -75,11 +79,10 @@ in the card. Keep a personal copy outside git otherwise.
    config, and add tests. Follow the leakage rules in `AGENTS.md`: backward-looking features
    only, scalers fitted on training rows, no data after the cutoff.
 4. **Score it the same way as everything else.** Use the official relative-skill metric on
-   the rolling backtest origins (1997, 2002, 2007, 2011; 7-year horizon), as in ADR 0002 and
-   `uv run proto-star climate-backtest`. Report the per-origin scores and the per-metric skill.
-   Always compare with `ten_year_mean` (the current baseline) on the same origins.
-   The backtest currently scores only the built-in baseline methods. Until registered models
-   are wired into it, record exactly how the score was produced (command, commit, config).
+   the rolling backtest origins (1997, 2002, 2007, 2011; 7-year horizon), using
+   `proto_star.backtest` as shown in `notebooks/README.md`. Report the per-origin scores and the
+   per-metric skill, with forecast years 4–7 separately. Always compare with `ten_year_mean` and
+   the current best on the same origins, and record the commit and how the score was produced.
 5. **Log the result.** Add a row to `docs/experiments.md`, update the index row, and fill the
    card's *Our results* section, **including when it is worse than the baseline**.
 6. **Never tune on the leaderboard.** Select settings on the backtest only. Leaderboard
@@ -87,6 +90,7 @@ in the card. Keep a personal copy outside git otherwise.
 
 ## Scoring reference
 
-Current best: **`ten_year_mean`**. Its aggregate skills by backtest origin (from ADR 0002) are
-1.09 (1997), 3.14 (2002), 1.13 (2007) and 5.94 (2011). A paper beats the baseline only if it
+Baseline: **`ten_year_mean`**. Its aggregate skills by backtest origin (from ADR 0003) are
+1.43 (1997), 3.01 (2002), 0.30 (2007) and 5.16 (2011). The current best is the metric ensemble:
+3.45, 3.33, 0.87 and 5.95. A paper beats the baseline only if it
 improves on these across origins, not at one origin.

@@ -76,6 +76,8 @@ generic synthetic workflow:
 
 ```bash
 uv run python scripts/download_protostar_data.py
+uv run python scripts/build_master_dataset.py   # shared cleaned table, see docs/data.md
+uv run python scripts/compare_baselines.py      # numbers to beat, see notebooks/README.md
 uv run proto-star climate-backtest data/raw/protostar/annual_indices.parquet
 uv run proto-star climate-submission `
   data/raw/protostar/annual_indices.parquet data/raw/protostar/city_info.parquet

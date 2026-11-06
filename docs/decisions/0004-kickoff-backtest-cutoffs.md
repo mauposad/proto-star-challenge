@@ -1,8 +1,8 @@
 # 0004: Use the kickoff deck's backtest cut-offs
 
 - **Date:** 2026-11-06
-- **Status:** proposed (needs team review on the PR)
-- **Deciders:** TBD
+- **Status:** accepted (2026-11-06)
+- **Deciders:** the team; Luke proposed it, and the human owner confirmed it as the agreed validation scheme
 
 ## Context
 
@@ -14,7 +14,8 @@ scheme.
 ## Decision
 
 Use cut-offs 1980, 1995, and 2011 as the default in `proto_star.backtest`, the CLI, and
-`scripts/evaluate_metric_ensemble.py`.
+`scripts/evaluate_metric_ensemble.py`. They are defined once, as `DEFAULT_CUTOFFS` in
+`proto_star.climate`, and trial configs cannot override them.
 
 ## Consequences
 

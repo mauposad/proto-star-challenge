@@ -14,6 +14,8 @@ from collections.abc import Callable, Iterable, Mapping
 import pandas as pd
 
 from proto_star.climate import (
+    BASELINE_METHODS,
+    DEFAULT_CUTOFFS,
     FORECAST_CUTOFF,
     FORECAST_YEARS,
     METRICS,
@@ -30,10 +32,10 @@ from proto_star.climate import (
 
 Forecaster = Callable[[pd.DataFrame, int, list[int]], pd.DataFrame]
 
-DEFAULT_CUTOFFS = (1980, 1995, 2011)  # from the kickoff deck, see docs/backtest_plan.md
 DEFAULT_HORIZON = 7
 # Forecast lead in years. 1-3 mirrors the Live Score (2019-2021), 4-7 the Final Score (2022-2025).
 WINDOWS = {"all": (1, 7), "years_1_3": (1, 3), "years_4_7": (4, 7)}
+CURRENT_BEST = "current_best"
 CURRENT_BEST_METHODS = {
     "annual_avg_temp": "ten_year_mean",
     "total_precip_in": "thirty_year_mean",
@@ -68,6 +70,32 @@ def ensemble_forecaster(methods: Mapping[str, str] = CURRENT_BEST_METHODS) -> Fo
         )
 
     return forecast
+
+
+def resolve_forecaster(
+    name: str, ensembles: Mapping[str, Mapping[str, str]] | None = None
+) -> Forecaster:
+    """Look up a forecaster by the name used in trial configs.
+
+    ``current_best`` is the team's current ensemble, a built-in baseline name is that
+    baseline, and anything in ``ensembles`` is a metric-to-baseline mapping from the config.
+    """
+    if ensembles and name in ensembles:
+        mapping = dict(ensembles[name])
+        if set(mapping) != set(METRICS):
+            raise ValueError(f"ensemble {name!r} must map exactly {list(METRICS)}")
+        unknown = sorted(set(mapping.values()) - set(BASELINE_METHODS))
+        if unknown:
+            raise ValueError(f"ensemble {name!r} uses unknown baselines {unknown}")
+        return ensemble_forecaster(mapping)
+    if name == CURRENT_BEST:
+        return ensemble_forecaster()
+    if name in BASELINE_METHODS:
+        return baseline_forecaster(name)
+    raise ValueError(
+        f"unknown forecaster {name!r}; use {CURRENT_BEST!r}, one of {list(BASELINE_METHODS)}, "
+        "or define it under `ensembles` in the trial config"
+    )
 
 
 def _check_coverage(

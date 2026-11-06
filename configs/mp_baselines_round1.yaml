@@ -1,0 +1,25 @@
+# Trial: finish the baseline set (docs/replication_order.md step 1).
+# Run:    uv run proto-star climate-trial configs/mp_baselines_round1.yaml --record
+# Package: uv run proto-star climate-package configs/mp_baselines_round1.yaml
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+name: baselines_round1
+description: >
+  Compare every built-in baseline, including the new 15-year mean, hinge fit and median
+  windows, with the current metric ensemble and a per-metric ensemble chosen from this
+  trial's own validation results.
+
+forecasters:
+  - current_best          # reference: 10y mean for temperature/CDD, 30y mean for precip/hottest day
+  - ten_year_mean
+  - fifteen_year_mean
+  - thirty_year_mean
+  - ten_year_median
+  - fifteen_year_median
+  - thirty_year_median
+  - linear_trend
+  - hinge_fit
+
+reference: current_best
+# Chosen from this trial's validation results only (never leaderboard scores): no new baseline
+# beat current_best in mean raw score, so the submission candidate stays current_best.
+submit: current_best

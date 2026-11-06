@@ -13,6 +13,8 @@ EXTERNAL_DIR = DATA_DIR / "external"  # third-party reference data
 CONFIGS_DIR = PROJECT_ROOT / "configs"
 RUNS_DIR = PROJECT_ROOT / "runs"  # one folder per training run
 SUBMISSIONS_DIR = PROJECT_ROOT / "submissions"
+TRIALS_DIR = RUNS_DIR / "trials"  # raw output of each climate trial (git-ignored)
+TRIAL_NOTES_DIR = PROJECT_ROOT / "docs" / "trials"  # committed write-up of each trial
 
 
 def resolve(path: str | Path) -> Path:

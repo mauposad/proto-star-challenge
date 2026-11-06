@@ -24,12 +24,36 @@ FORECAST_CUTOFF = 2018
 FORECAST_YEARS = tuple(range(2019, 2026))
 MAX_MISSING_DAYS = 10
 BASELINE_WINDOW_YEARS = 30
+# Backtest origins agreed by the team: kickoff deck, ADR 0004. The one place they are defined.
+DEFAULT_CUTOFFS = (1980, 1995, 2011)
 BASELINE_METHODS = (
     "last_valid_year",
     "ten_year_mean",
+    "fifteen_year_mean",
     "thirty_year_mean",
+    "ten_year_median",
+    "fifteen_year_median",
+    "thirty_year_median",
     "linear_trend",
+    "hinge_fit",
 )
+BASELINE_DESCRIPTIONS = {
+    "last_valid_year": "Most recent valid year, held flat",
+    "ten_year_mean": "Mean of the last 10 valid years",
+    "fifteen_year_mean": "Mean of the last 15 valid years",
+    "thirty_year_mean": "Mean of valid years in the 30 calendar years to the cutoff (reference)",
+    "ten_year_median": "Median of the last 10 valid years",
+    "fifteen_year_median": "Median of the last 15 valid years",
+    "thirty_year_median": "Median of valid years in the 30 calendar years before the cutoff",
+    "linear_trend": "Least-squares line through the 30-calendar-year window, extrapolated",
+    "hinge_fit": "Flat level then linear ramp over the 30-year window; hinge year fit per series",
+}
+# Last-N-valid-years windows. The 30-year window is by calendar year instead (see below).
+_RECENT_VALID_YEARS = {"ten_year": 10, "fifteen_year": 15}
+# Hinge fit needs a flat part and a ramp that both mean something.
+HINGE_MIN_POINTS = 20
+HINGE_MIN_FLAT_POINTS = 5
+HINGE_MIN_RAMP_POINTS = 10
 
 
 class ClimateDataError(ValueError):
@@ -163,6 +187,26 @@ def validate_climate_history(history: pd.DataFrame, *, max_year: int | None = No
         raise ClimateDataError("climate history contains duplicate city/year/metric values")
 
 
+def _hinge_fit(years: np.ndarray, values: np.ndarray, targets: np.ndarray) -> np.ndarray:
+    """Flat level up to a hinge year, then a straight ramp; the hinge year minimises squared error.
+
+    The ramp keeps at least ``HINGE_MIN_RAMP_POINTS`` observations so the slope is not
+    extrapolated from a handful of years.  Short series fall back to their mean.
+    """
+    if values.size < HINGE_MIN_POINTS:
+        return np.full(len(targets), values.mean())
+    best_sse = np.inf
+    best: tuple[float, float, float] = (float(values.mean()), 0.0, float(years[-1]))
+    for hinge in years[HINGE_MIN_FLAT_POINTS : values.size - HINGE_MIN_RAMP_POINTS + 1]:
+        design = np.column_stack([np.ones_like(years), np.maximum(0.0, years - hinge)])
+        coefficients, *_ = np.linalg.lstsq(design, values, rcond=None)
+        sse = float(np.sum((design @ coefficients - values) ** 2))
+        if sse < best_sse:
+            best_sse, best = sse, (float(coefficients[0]), float(coefficients[1]), float(hinge))
+    level, slope, hinge_year = best
+    return level + slope * np.maximum(0.0, targets - hinge_year)
+
+
 def _predict_group(
     group: pd.DataFrame, years: np.ndarray, method: str, fallback: float, cutoff_year: int
 ) -> np.ndarray:
@@ -172,8 +216,11 @@ def _predict_group(
         return np.full(len(years), fallback)
     if method == "last_valid_year":
         return np.full(len(years), all_values[-1])
-    if method == "ten_year_mean":
-        return np.full(len(years), all_values[-10:].mean())
+
+    prefix, _, statistic = method.rpartition("_")
+    if prefix in _RECENT_VALID_YEARS and statistic in ("mean", "median"):
+        window = all_values[-_RECENT_VALID_YEARS[prefix] :]
+        return np.full(len(years), window.mean() if statistic == "mean" else np.median(window))
 
     # The organizers' 30-year baselines cover calendar years (1989-2018 for the real
     # forecast), not the last 30 valid years. Sparse cities must not reach back decades.
@@ -184,11 +231,15 @@ def _predict_group(
     observed_years = recent["year"].to_numpy(dtype=float)
     if method == "thirty_year_mean":
         return np.full(len(years), values.mean())
+    if method == "thirty_year_median":
+        return np.full(len(years), np.median(values))
     if method == "linear_trend":
         if values.size < 2 or np.isclose(np.ptp(observed_years), 0):
             return np.full(len(years), values.mean())
         slope, intercept = np.polyfit(observed_years, values, deg=1)
         return slope * years + intercept
+    if method == "hinge_fit":
+        return _hinge_fit(observed_years, values, years.astype(float))
     raise ValueError(f"unknown climate baseline {method!r}")
 
 

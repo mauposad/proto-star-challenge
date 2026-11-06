@@ -23,6 +23,7 @@ SUBMISSION_COLUMNS = ["city_id", "year", "metric", "predicted_value"]
 FORECAST_CUTOFF = 2018
 FORECAST_YEARS = tuple(range(2019, 2026))
 MAX_MISSING_DAYS = 10
+BASELINE_WINDOW_YEARS = 30
 BASELINE_METHODS = (
     "last_valid_year",
     "ten_year_mean",
@@ -57,6 +58,42 @@ _METRIC_SPECS: dict[str, tuple[str, tuple[str, ...]]] = {
 }
 
 
+def assert_weather_cutoff(
+    table: pd.DataFrame, *, name: str, cutoff_year: int = FORECAST_CUTOFF
+) -> None:
+    """Stop if a weather table holds observations after the challenge cutoff.
+
+    Run every weather input through this, including external sources.  A table with
+    no recognizable date column fails rather than passes: static metadata should
+    simply not be sent here, so an unchecked weather table cannot slip through.
+    """
+    columns = [column for column in ("Year", "year", "Date", "date") if column in table.columns]
+    if not columns:
+        raise ClimateDataError(f"{name} has no Year or Date column to check against the cutoff")
+    for column in columns:
+        if column.lower() == "year":
+            years = pd.to_numeric(table[column], errors="coerce")
+        else:
+            years = pd.to_datetime(table[column], errors="coerce").dt.year
+        if (years.isna() & table[column].notna()).any():
+            raise ClimateDataError(f"{name} has unparseable values in column {column!r}")
+        last = years.max()
+        if pd.notna(last) and int(last) > cutoff_year:
+            raise ClimateDataError(
+                f"{name} contains year {int(last)}, after allowed cutoff {cutoff_year}"
+            )
+
+
+def metric_valid_mask(annual: pd.DataFrame, metric: str) -> pd.Series:
+    """Rows of ``annual`` whose ``metric`` passes the organizer's missing-days rule."""
+    value_column, missing_columns = _METRIC_SPECS[metric]
+    values = pd.to_numeric(annual[value_column], errors="coerce")
+    valid = values.notna() & np.isfinite(values)
+    for column in missing_columns:
+        valid &= pd.to_numeric(annual[column], errors="coerce").le(MAX_MISSING_DAYS)
+    return valid
+
+
 def annual_to_long(annual: pd.DataFrame, *, cutoff_year: int = FORECAST_CUTOFF) -> pd.DataFrame:
     """Melt annual indices to one quality-screened city/year/metric value per row.
 
@@ -81,13 +118,9 @@ def annual_to_long(annual: pd.DataFrame, *, cutoff_year: int = FORECAST_CUTOFF) 
         )
 
     frames: list[pd.DataFrame] = []
-    for metric, (value_column, missing_columns) in _METRIC_SPECS.items():
+    for metric, (value_column, _) in _METRIC_SPECS.items():
         values = pd.to_numeric(annual[value_column], errors="coerce")
-        complete = pd.Series(True, index=annual.index)
-        for column in missing_columns:
-            missing_days = pd.to_numeric(annual[column], errors="coerce")
-            complete &= missing_days.le(MAX_MISSING_DAYS)
-        valid = complete & values.notna() & np.isfinite(values)
+        valid = metric_valid_mask(annual, metric)
         frames.append(
             pd.DataFrame(
                 {
@@ -131,17 +164,24 @@ def validate_climate_history(history: pd.DataFrame, *, max_year: int | None = No
 
 
 def _predict_group(
-    group: pd.DataFrame, years: np.ndarray, method: str, fallback: float
+    group: pd.DataFrame, years: np.ndarray, method: str, fallback: float, cutoff_year: int
 ) -> np.ndarray:
-    recent = group.sort_values("year").tail(30)
-    values = recent["actual_value"].to_numpy(dtype=float)
-    observed_years = recent["year"].to_numpy(dtype=float)
-    if values.size == 0:
+    ordered = group.sort_values("year")
+    all_values = ordered["actual_value"].to_numpy(dtype=float)
+    if all_values.size == 0:
         return np.full(len(years), fallback)
     if method == "last_valid_year":
-        return np.full(len(years), values[-1])
+        return np.full(len(years), all_values[-1])
     if method == "ten_year_mean":
-        return np.full(len(years), values[-10:].mean())
+        return np.full(len(years), all_values[-10:].mean())
+
+    # The organizers' 30-year baselines cover calendar years (1989-2018 for the real
+    # forecast), not the last 30 valid years. Sparse cities must not reach back decades.
+    recent = ordered.loc[ordered["year"] > cutoff_year - BASELINE_WINDOW_YEARS]
+    if recent.empty:
+        recent = ordered.tail(BASELINE_WINDOW_YEARS)
+    values = recent["actual_value"].to_numpy(dtype=float)
+    observed_years = recent["year"].to_numpy(dtype=float)
     if method == "thirty_year_mean":
         return np.full(len(years), values.mean())
     if method == "linear_trend":
@@ -174,7 +214,7 @@ def baseline_forecast(
         city_key = str(city_id)
         metric_key = str(metric)
         fallback = float(fallbacks[metric_key])
-        predictions = _predict_group(group, years, method, fallback)
+        predictions = _predict_group(group, years, method, fallback, cutoff_year)
         outputs.append(
             pd.DataFrame(
                 {

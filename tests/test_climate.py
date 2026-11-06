@@ -5,6 +5,7 @@ from proto_star.climate import (
     ClimateDataError,
     ClimateSubmissionError,
     annual_to_long,
+    assert_weather_cutoff,
     backtest_baselines,
     baseline_forecast,
     metric_ensemble_forecast,
@@ -47,6 +48,62 @@ def test_annual_to_long_rejects_post_cutoff_data() -> None:
     annual.loc[0, "Year"] = 2019
     with pytest.raises(ClimateDataError, match="after allowed cutoff"):
         annual_to_long(annual)
+
+
+def _sparse_history(years: list[int], values: list[float]) -> pd.DataFrame:
+    return pd.DataFrame({"city_id": "A", "year": years, "metric": "cdd", "actual_value": values})
+
+
+def _forecast_2019(history: pd.DataFrame, method: str) -> float:
+    forecast = baseline_forecast(history, cutoff_year=2018, forecast_years=[2019], method=method)
+    return float(forecast["predicted_value"].iloc[0])
+
+
+def test_thirty_year_mean_uses_calendar_window_not_last_valid_years() -> None:
+    history = _sparse_history([1950, 1988, 1989, 2018], [1000.0, 1000.0, 10.0, 20.0])
+    assert _forecast_2019(history, "thirty_year_mean") == pytest.approx(15.0)
+
+
+def test_linear_trend_uses_calendar_window() -> None:
+    history = _sparse_history([1950, 2017, 2018], [1000.0, 10.0, 20.0])
+    assert _forecast_2019(history, "linear_trend") == pytest.approx(30.0)
+
+
+def test_thirty_year_mean_falls_back_when_window_is_empty() -> None:
+    history = _sparse_history([1950, 1951], [10.0, 20.0])
+    assert _forecast_2019(history, "thirty_year_mean") == pytest.approx(15.0)
+
+
+def test_ten_year_mean_still_uses_last_valid_years() -> None:
+    history = _sparse_history([1950, 2018], [10.0, 20.0])
+    assert _forecast_2019(history, "ten_year_mean") == pytest.approx(15.0)
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        pd.DataFrame({"Year": [2018, 2019]}),
+        pd.DataFrame({"year": [2019]}),
+        pd.DataFrame({"Date": ["2018-12-31", "2019-01-01"]}),
+    ],
+)
+def test_assert_weather_cutoff_rejects_post_cutoff_rows(table: pd.DataFrame) -> None:
+    with pytest.raises(ClimateDataError, match="after allowed cutoff"):
+        assert_weather_cutoff(table, name="weather")
+
+
+def test_assert_weather_cutoff_accepts_last_allowed_day() -> None:
+    assert_weather_cutoff(pd.DataFrame({"Date": ["2018-12-31"]}), name="weather")
+
+
+def test_assert_weather_cutoff_fails_without_date_column() -> None:
+    with pytest.raises(ClimateDataError, match="no Year or Date column"):
+        assert_weather_cutoff(pd.DataFrame({"tmax": [90.0]}), name="weather")
+
+
+def test_assert_weather_cutoff_fails_on_unparseable_dates() -> None:
+    with pytest.raises(ClimateDataError, match="unparseable"):
+        assert_weather_cutoff(pd.DataFrame({"Date": ["not-a-date"]}), name="weather")
 
 
 def test_official_score_is_relative_to_reference() -> None:

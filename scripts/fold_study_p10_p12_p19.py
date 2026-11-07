@@ -88,7 +88,8 @@ def run(
 
 
 def _fmt(frame: pd.DataFrame, digits: int = 2) -> str:
-    return markdown_table(frame.round(digits).reset_index())
+    # object dtype keeps integer columns (years, counts) from printing as floats
+    return markdown_table(frame.round(digits).reset_index().astype(object))
 
 
 def report(cfg: FoldStudyConfig, run_id: str, out_path: Path) -> None:
@@ -313,27 +314,36 @@ def report(cfg: FoldStudyConfig, run_id: str, out_path: Path) -> None:
             out += [f"### `{metric}`, forecast years {leads[0]}-{leads[1]}", "", _fmt(warm, 3), ""]
             window = "years_1_3" if leads == (1, 3) else "years_4_7"
             matrix = score_matrix(results, window, cutoffs=dense)
+            skill = score_matrix(results, window, value=f"{metric}_skill", cutoffs=dense)
             corr_rows = []
             for method in matrix.index:
                 for ref in refs:
                     if method == ref:
                         continue
-                    diff = matrix.loc[method] - matrix.loc[ref]
-                    corr_rows.append(
-                        {
-                            "method": method,
-                            "reference": ref,
-                            "corr with pre_trend": float(
-                                np.corrcoef(diff, warm["pre_trend_per_decade"])[0, 1]
-                            ),
-                            "corr with shift_vs_10y": float(
-                                np.corrcoef(diff, warm["shift_vs_10y"])[0, 1]
-                            ),
-                        }
-                    )
+                    gaps = {
+                        "raw score": matrix.loc[method] - matrix.loc[ref],
+                        f"{metric} skill": (skill.loc[method] - skill.loc[ref]) * 100.0,
+                    }
+                    for label, diff in gaps.items():
+                        if np.allclose(diff, 0.0):
+                            continue  # identical forecasts for this metric: no correlation
+                        corr_rows.append(
+                            {
+                                "method": method,
+                                "reference": ref,
+                                "gap": label,
+                                "mean gap": float(diff.mean()),
+                                "corr with pre_trend": float(
+                                    np.corrcoef(diff, warm["pre_trend_per_decade"])[0, 1]
+                                ),
+                                "corr with shift_vs_10y": float(
+                                    np.corrcoef(diff, warm["shift_vs_10y"])[0, 1]
+                                ),
+                            }
+                        )
             out += [
-                f"Correlation across origins of the `{window}` raw-score gap with this "
-                "metric's signal:",
+                f"Correlation across origins of each `{window}` gap with this metric's signal "
+                "(gaps that are zero at every origin are left out):",
                 "",
                 markdown_table(pd.DataFrame(corr_rows).round(2)),
                 "",

@@ -107,4 +107,8 @@ variants:
     params: {model_metrics: [cdd], estimator: ridge, alpha: 1.0, train_years: null}
 
 reference: current_best
+# Chosen from this trial's backtest only (never leaderboard scores). hybrid_ridge_all_cdd has a mean
+# raw score of 3.60 / 0.94 / 5.54 (all / years 1-3 / years 4-7) vs current_best 2.92 / 0.63 / 4.68,
+# and beats it at 3/3, 2/3 and 3/3 origins. The pooled model only helped CDD. The pure median
+# (pinball 0.5) variants lost to it.
 submit: hybrid_ridge_all_cdd

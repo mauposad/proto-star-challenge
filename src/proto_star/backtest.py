@@ -29,6 +29,7 @@ from proto_star.climate import (
     official_score,
     validate_submission,
 )
+from proto_star.trend import PooledTrendSpec, pooled_trend_forecast
 
 Forecaster = Callable[[pd.DataFrame, int, list[int]], pd.DataFrame]
 
@@ -72,14 +73,31 @@ def ensemble_forecaster(methods: Mapping[str, str] = CURRENT_BEST_METHODS) -> Fo
     return forecast
 
 
+def pooled_trend_forecaster(spec: PooledTrendSpec) -> Forecaster:
+    """Wrap a pooled-trend model as a forecaster."""
+
+    def forecast(train: pd.DataFrame, cutoff_year: int, forecast_years: list[int]) -> pd.DataFrame:
+        history = annual_to_long(train, cutoff_year=cutoff_year)
+        return pooled_trend_forecast(
+            history, cutoff_year=cutoff_year, forecast_years=forecast_years, spec=spec
+        )
+
+    return forecast
+
+
 def resolve_forecaster(
-    name: str, ensembles: Mapping[str, Mapping[str, str]] | None = None
+    name: str,
+    ensembles: Mapping[str, Mapping[str, str]] | None = None,
+    pooled_trends: Mapping[str, PooledTrendSpec] | None = None,
 ) -> Forecaster:
     """Look up a forecaster by the name used in trial configs.
 
     ``current_best`` is the team's current ensemble, a built-in baseline name is that
-    baseline, and anything in ``ensembles`` is a metric-to-baseline mapping from the config.
+    baseline, anything in ``ensembles`` is a metric-to-baseline mapping from the config, and
+    anything in ``pooled_trends`` is a pooled-trend model from the config.
     """
+    if pooled_trends and name in pooled_trends:
+        return pooled_trend_forecaster(pooled_trends[name])
     if ensembles and name in ensembles:
         mapping = dict(ensembles[name])
         if set(mapping) != set(METRICS):
@@ -94,7 +112,7 @@ def resolve_forecaster(
         return baseline_forecaster(name)
     raise ValueError(
         f"unknown forecaster {name!r}; use {CURRENT_BEST!r}, one of {list(BASELINE_METHODS)}, "
-        "or define it under `ensembles` in the trial config"
+        "or define it under `ensembles` or `pooled_trends` in the trial config"
     )
 
 

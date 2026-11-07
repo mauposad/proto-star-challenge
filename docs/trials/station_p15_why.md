@@ -1,6 +1,6 @@
 # Why analysis: station_p15
 
-Source run: `runs/trials/20261107-165407_station_p15` (results.csv), plus forecasts
+Source run: `runs/trials/20261107-171054_station_p15` (results.csv), plus forecasts
 recomputed on the same ADR 0004 folds (1980, 1995, 2011; 7-year horizon) for the
 per-city split. Made by `scripts/analyze_station_p15.py`. Raw score = official score
 without its floor at zero. Nothing here uses leaderboard numbers.
@@ -8,7 +8,8 @@ without its floor at zero. Nothing here uses leaderboard numbers.
 ## 1. Score table
 
 Mean raw score over the three origins, and the origins (of 3) where the method beats
-each reference, per window (all / years 1-3 / years 4-7). Years 4-7 match the Final Score.
+each reference, per window (all / years 1-3 / years 4-7). Years 4-7 match the Final
+Score.
 
 | method | all | years_1_3 | years_4_7 | wins vs current_best (all/1-3/4-7) | wins vs hybrid_ridge_all_cdd (all/1-3/4-7) |
 |---|---|---|---|---|---|

@@ -82,6 +82,8 @@ The pooled package is also kept as the `submission-package` artifact of its dry-
 1. **Submit `hybrid_ridge_all_cdd`?** It is the only method that beats `current_best` at every
    origin in every window that counts. It changes only the CDD column. If adopted, write an ADR
    first; the publish workflow can then run on `configs/agent_paper_p09_p14_pooled.yaml`.
+   Decided in [ADR 0005](../decisions/0005-submit-pooled-ridge-cdd.md) (2026-11-07). The live
+   leaderboard read on the same day is in [leaderboard_live_2026-11-07.md](leaderboard_live_2026-11-07.md).
 2. **Combine the CDD forecasts (replication step 11, P16/P17).** An equal-weight average of the
    pooled ridge, DeepAR, EWMA and ARIMA CDD forecasts, fixed in advance, would test whether
    the CDD gain survives without picking a single winner.

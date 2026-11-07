@@ -47,9 +47,9 @@ documentation and provenance; it must not become a second codebase.
 | Thing | Location |
 |---|---|
 | Paper card (summary, architecture, deviations, results) | `papers/<folder>/README.md` |
-| Model code | `src/proto_star/models/`, registered in `models/registry.py` |
+| Model code | one module in `src/proto_star/forecasters/`, registered with `@register_forecaster` (see `forecasters/registry.py`); heavy imports inside the factory |
 | Paper-specific features / preprocessing | `src/proto_star/data/` (reusable, tested) |
-| Hyperparameters | `configs/<initials>_paper_<short-name>.yaml` |
+| Hyperparameters | `configs/<initials>_paper_<short-name>.yaml`, under `variants: {name: {forecaster: ..., params: {...}}}` |
 | Tests | `tests/`, mirroring the module tested |
 | Run outputs | `runs/` (git-ignored, produced by the CLI only) |
 | Every result, including failures | a row in `docs/experiments.md` **and** the index above |

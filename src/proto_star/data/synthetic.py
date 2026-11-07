@@ -43,3 +43,37 @@ def make_train_test(
     train = df[df["date"] < cutoff].reset_index(drop=True)
     test = df[df["date"] >= cutoff].drop(columns="max_temp").reset_index(drop=True)
     return train, test
+
+
+def make_annual_master(
+    n_cities: int = 4, first_year: int = 1950, last_year: int = 2018, seed: int = 0
+) -> pd.DataFrame:
+    """Small annual master table (same core columns as ``annual_master.parquet``) for tests.
+
+    Each city has its own level, a warming trend and seeded noise.  No year is missing.
+    """
+    rng = np.random.default_rng(seed)
+    years = np.arange(first_year, last_year + 1)
+    frames = []
+    for city in range(n_cities):
+        trend = 0.03 * (years - first_year)
+        noise = rng.standard_normal(len(years))
+        frames.append(
+            pd.DataFrame(
+                {
+                    "ID": f"CITY{city:03d}",
+                    "Lat": 30.0 + 3.0 * city,
+                    "Lon": -120.0 + 8.0 * city,
+                    "region": "North" if city % 2 else "South",
+                    "Year": years,
+                    "Avg Temp": 50.0 + 4.0 * city + trend + noise,
+                    "ToT Prcp": 30.0 + 2.0 * city + 4.0 * rng.standard_normal(len(years)),
+                    "Max Tmax": 95.0 + city + 0.5 * trend + 2.0 * noise,
+                    "cdd": 800.0 + 250.0 * city + 15.0 * trend + 60.0 * noise,
+                    "Miss Tmax": 0,
+                    "Miss Tmin": 0,
+                    "Miss Prcp": 0,
+                }
+            )
+        )
+    return pd.concat(frames, ignore_index=True)

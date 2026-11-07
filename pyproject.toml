@@ -17,6 +17,7 @@ dependencies = [
     "huggingface-hub>=0.25",
     "datasets>=3.0",
     "python-dotenv>=1.0",
+    "statsmodels>=0.15.0",
 ]
 
 [project.optional-dependencies]
@@ -90,3 +91,12 @@ python_version = "3.12"
 files = ["src"]
 ignore_missing_imports = true
 warn_unused_ignores = true
+
+# torch comes from the CPU wheel index (no GPU on the team machines; CUDA wheels are ~2.5 GB).
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]

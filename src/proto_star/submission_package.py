@@ -40,7 +40,9 @@ from proto_star.trial import (
 )
 
 RAW_INPUTS = ("annual_indices.parquet", "city_info.parquet")
-REQUIREMENT_PACKAGES = ("numpy", "pandas", "pyarrow", "pyyaml", "pydantic")
+# Scripts shipped in code/scripts: the data pipeline, plus the ones that produced the evidence.
+PIPELINE_SCRIPTS = ("download_protostar_data.py", "build_master_dataset.py")
+EVIDENCE_SCRIPTS = ("compare_baselines.py", "evaluate_metric_ensemble.py")
 DOWNLOAD = "`python code/scripts/download_protostar_data.py`"
 TEAM_FILE = PROJECT_ROOT / "docs" / "submission" / "team.yaml"
 SUBMISSION_DOCS = ("policy-idea.md", "ecosystem-feedback.md")
@@ -64,6 +66,31 @@ if __name__ == "__main__":
 '''
 
 
+CODE_README = """# Code
+
+Everything here rebuilds `../submission.csv` from `../data`.
+
+| Path | Purpose |
+|---|---|
+| `reproduce.py` | Rebuilds the forecasts from `../data` and compares them with `submission.csv` |
+| `check_submission.py` | Official format check (same as the challenge Space) |
+| `trial.yaml` | Trial config: candidate forecasters, reference, and the one submitted |
+| `src/proto_star/` | The pipeline: loading, backtest, forecasters, packaging |
+| `scripts/download_protostar_data.py` | Downloads the public CMU training tables |
+| `scripts/build_master_dataset.py` | Builds the cleaned annual master table |
+| `scripts/compare_baselines.py` | Prints the backtest table behind the method choice |
+| `scripts/evaluate_metric_ensemble.py` | Prints the per-metric ensemble backtest |
+| `requirements.txt` | Pinned versions the package was built with |
+| `AGENTS.md` | Rules the AI agents followed (2018-12-31 data cut-off) |
+
+```bash
+pip install -r code/requirements.txt
+python code/reproduce.py
+python code/check_submission.py submission.csv
+```
+"""
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -75,15 +102,25 @@ def _copy_code(code_dir: Path, config_path: Path) -> None:
     )
     scripts = code_dir / "scripts"
     scripts.mkdir()
-    for name in ("download_protostar_data.py", "build_master_dataset.py"):
+    for name in PIPELINE_SCRIPTS + EVIDENCE_SCRIPTS:
         shutil.copyfile(PROJECT_ROOT / "scripts" / name, scripts / name)
     shutil.copyfile(PROJECT_ROOT / "AGENTS.md", code_dir / "AGENTS.md")
     check = "check_submission.py"
     shutil.copyfile(PROJECT_ROOT / "scripts" / check, code_dir / check)
     shutil.copyfile(config_path, code_dir / "trial.yaml")
     (code_dir / "reproduce.py").write_text(REPRODUCE_SCRIPT)
-    pins = [f"{pkg}=={metadata.version(pkg)}" for pkg in REQUIREMENT_PACKAGES]
-    (code_dir / "requirements.txt").write_text("\n".join(pins) + "\n")
+    (code_dir / "README.md").write_text(CODE_README)
+    (code_dir / "requirements.txt").write_text("\n".join(_runtime_pins()) + "\n")
+
+
+def _runtime_pins() -> list[str]:
+    """Pin every runtime dependency of proto-star (extras excluded) to the installed version."""
+    names = [
+        re.split(r"[<>=!~;\s\[(]", req, maxsplit=1)[0]
+        for req in metadata.requires("proto-star") or []
+        if "extra ==" not in req
+    ]
+    return sorted(f"{name}=={metadata.version(name)}" for name in names)
 
 
 def _copy_data(data_dir: Path, master_dir: Path, raw_dir: Path) -> list[Path]:
@@ -201,6 +238,11 @@ tags:
   - climate
   - forecasting
   - protostar-climate-2026
+configs:
+  - config_name: default
+    data_files:
+      - split: test
+        path: submission.csv
 ---
 
 # {team["team_name"]}: ProtoStar Climate Challenge Submission

@@ -107,7 +107,7 @@ P09: method papers with no benchmark relevant to us.
 Same backtest origins as the baseline (ADR 0004 folds 1980/1995/2011, 7-year horizon).
 Trial note: `docs/trials/paper_p09_p14_pooled.md`. Command:
 `OMP_NUM_THREADS=5 uv run proto-star climate-trial configs/agent_paper_p09_p14_pooled.yaml --record`
-(code commit `993784c`, about 13 minutes on 5 threads). Master content hash
+(recorded at commit `07d6c39`, clean tree, about 13 minutes on 5 threads). Master content hash
 `99128065d035cf531fe13c214e514b6bb73927ae90a80a9b903949d13abb04d1`.
 
 **Chosen variant `hybrid_ridge_all_cdd`** (pooled ridge on all history for CDD only, `current_best`

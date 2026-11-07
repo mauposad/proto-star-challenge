@@ -123,6 +123,11 @@ def test_package_has_the_layout_the_challenge_asks_for(config_path: Path, tmp_pa
         "code/requirements.txt",
         "code/trial.yaml",
         "code/src/proto_star/backtest.py",
+        "code/README.md",
+        "code/scripts/download_protostar_data.py",
+        "code/scripts/build_master_dataset.py",
+        "code/scripts/compare_baselines.py",
+        "code/scripts/evaluate_metric_ensemble.py",
         "data/README.md",
         f"data/{MASTER_FILE}",
     ):
@@ -131,6 +136,24 @@ def test_package_has_the_layout_the_challenge_asks_for(config_path: Path, tmp_pa
     assert list(submission.columns) == ["city_id", "year", "metric", "predicted_value"]
     assert len(submission) == 2 * 7 * 4  # two test cities
     assert "Policy idea" in (package / "README.md").read_text()
+
+
+def test_package_readme_declares_the_viewer_config(config_path: Path, tmp_path: Path) -> None:
+    package = _package(config_path, tmp_path)
+    front = (package / "README.md").read_text().split("---")[1]
+    config = yaml.safe_load(front)["configs"][0]
+    assert config["config_name"] == "default"
+    assert config["data_files"] == [{"split": "test", "path": "submission.csv"}]
+    assert (package / "submission.csv").exists()
+
+
+def test_package_code_readme_is_not_the_template_and_pins_all_runtime_deps(
+    config_path: Path, tmp_path: Path
+) -> None:
+    code = _package(config_path, tmp_path) / "code"
+    assert "Put the notebooks or scripts" not in (code / "README.md").read_text()
+    pinned = {line.split("==")[0] for line in (code / "requirements.txt").read_text().split()}
+    assert {"scikit-learn", "joblib", "typer", "pandas", "huggingface-hub"} <= pinned
 
 
 def test_package_reproduces_and_detects_tampering(config_path: Path, tmp_path: Path) -> None:

@@ -27,6 +27,12 @@
 - [ ] Upload the contents of the generated `submissions/<stamp>_<trial>/` folder
   (`submission.csv`, `README.md`, `code/`, `data/`) after filling in every
   `TODO before upload` line that `climate-package` printed.
+- [ ] Confirm the repo is public and not gated, and that the dataset page shows the
+  `default` config with a `test` split (the README front-matter `configs:` block
+  points at `submission.csv`).
+- [ ] Run the `Publish submission` workflow as a dry run first (`upload` unticked); it
+  rebuilds the package in a clean environment and checks the layout. Uploading removes
+  stale files under `code/` and `data/` on the Hub.
 - [ ] Include the method, policy, ecosystem feedback, limitations, AI-tool
   disclosure, source licenses, cutoff, and checksums.
 - [ ] Commit/push the public dataset, record the commit hash, then paste its

@@ -15,13 +15,6 @@
       "Bash(git diff:*)",
       "Bash(git log:*)"
     ],
-    "ask": [
-      "Bash(uv add:*)",
-      "Bash(uv remove:*)",
-      "Bash(git commit:*)",
-      "Bash(git push:*)",
-      "Bash(rm:*)"
-    ],
     "deny": [
       "Read(./.env)",
       "Read(./.env.*)",
@@ -51,6 +44,16 @@
       "Bash(rm -rf submissions:*)",
       "Bash(huggingface-cli upload:*)",
       "Bash(hf upload:*)"
+    ],
+    "ask": [
+      "Bash(uv add:*)",
+      "Bash(uv remove:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(rm:*)"
     ]
+  },
+  "enabledPlugins": {
+    "huggingface-skills@anthropic-plugin-directory": true
   }
 }

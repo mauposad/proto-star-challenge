@@ -203,8 +203,9 @@ def make_pooled_median(
 register_forecaster(
     "pooled_median_p09_p14",
     description=(
-        "Global (pooled over cities) direct multi-horizon median model on per-series "
-        "normalized lags, trailing means, Lat/Lon, region (P14 + P09)"
+        "Global (pooled over cities) direct multi-horizon model on per-series normalized "
+        "lags, trailing means, Lat/Lon, region (P14); loss set by estimator: pinball 0.5 "
+        "(P09) or ridge"
     ),
 )(make_pooled_median)
 
@@ -212,8 +213,8 @@ register_forecaster(
 @register_forecaster(
     "pooled_hybrid_p09_p14",
     description=(
-        "Pooled median model (P14 + P09) for the metrics in model_metrics, current_best "
-        "for the rest"
+        "Pooled global model (P14; loss set by estimator, P09 median or ridge) for the "
+        "metrics in model_metrics, current_best for the rest"
     ),
 )
 def make_pooled_hybrid(

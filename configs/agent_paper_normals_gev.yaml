@@ -1,0 +1,104 @@
+# Trial: alternative climate normals (P02 OCN, P03 window length, P04 EWMA / damped trend) and a
+# nonstationary GEV for the hottest day (P23). Paper card: papers/2013_wilks_livezey_normals/.
+# Run:     uv run proto-star climate-trial configs/agent_paper_normals_gev.yaml --record
+# Package: uv run proto-star climate-package configs/agent_paper_normals_gev.yaml
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+# Every window / alpha / damping / shrink factor below that is "picked" is picked by hindcasts
+# at pseudo-origins inside each fold's training years (cutoff-7, cutoff-14, ...), never by the
+# fold's test years. Every variant tried is kept here, failures included.
+name: paper_normals_gev
+description: >
+  Alternative climate normals from P02-P04 (optimal climate normal with the window picked by
+  in-train hindcast, exponentially weighted moving averages, damped trend) and P23's
+  nonstationary GEV median for the hottest day, against current_best and ten_year_mean.
+
+forecasters:
+  - current_best
+  - ten_year_mean
+  - ocn                 # P02: k in 5..30 per metric, 4 in-train pseudo-origins
+  - ocn_region          # P02 with one k per NOAA region
+  - ocn_city            # P02 with one k per city (noisy)
+  - ocn_o8              # 8 pseudo-origins
+  - ocn_lead47          # hindcast scored on leads 4-7 only
+  - ewma_a01            # P04: fixed alpha = 0.1
+  - ewma_opt            # P04: alpha picked by hindcast
+  - ewma_opt_o8
+  - optimal_o4          # k-year means and EWMAs compete per metric
+  - optimal_o8
+  - damped_trend        # P04 trend family with damping; hindcast always picked phi = 0
+  - gev_trend_opt       # P23: location trend, shrink picked by hindcast
+  - gev_shrink25        # P23: trend times 0.25
+  - gev_stationary      # P23 without trend: GEV median over 30 years
+  - gev_stationary_w40
+  - hybrid_a            # per metric, chosen after looking at this trial (post hoc)
+
+variants:
+  ocn:
+    forecaster: ocn_normal
+    params: {windows: [5, 7, 10, 12, 15, 20, 25, 30], scope: metric, n_origins: 4}
+  ocn_region:
+    forecaster: ocn_normal
+    params: {scope: region}
+  ocn_city:
+    forecaster: ocn_normal
+    params: {scope: city}
+  ocn_o8:
+    forecaster: ocn_normal
+    params: {n_origins: 8}
+  ocn_lead47:
+    forecaster: ocn_normal
+    params: {n_origins: 8, leads: [4, 5, 6, 7]}
+  ewma_a01:
+    forecaster: ewma_normal
+    params: {alpha: 0.1}
+  ewma_opt:
+    forecaster: ewma_normal
+    params: {alphas: [0.03, 0.05, 0.1, 0.15, 0.2, 0.3]}
+  ewma_opt_o8:
+    forecaster: ewma_normal
+    params: {alphas: [0.02, 0.03, 0.05, 0.07, 0.1, 0.15, 0.2, 0.3], n_origins: 8}
+  optimal_o4:
+    forecaster: optimal_normal
+    params: {windows: [5, 10, 15, 20, 30], alphas: [0.03, 0.05, 0.1, 0.2], n_origins: 4}
+  optimal_o8:
+    forecaster: optimal_normal
+    params: {windows: [5, 10, 15, 20, 30], alphas: [0.03, 0.05, 0.1, 0.2], n_origins: 8}
+  damped_trend:
+    forecaster: damped_trend_normal
+    params: {window: 10, trend_window: 30, phis: [0.0, 0.25, 0.5, 1.0]}
+  gev_trend_opt:
+    forecaster: gev_hottest_day
+    params: {window: 30, trend_shrink: [0.0, 0.25, 0.5, 1.0], fallback: current_best}
+  gev_shrink25:
+    forecaster: gev_hottest_day
+    params: {window: 30, trend_shrink: 0.25, fallback: current_best}
+  gev_stationary:
+    forecaster: gev_hottest_day
+    params: {window: 30, trend: false, fallback: current_best}
+  gev_stationary_w40:
+    forecaster: gev_hottest_day
+    params: {window: 40, trend: false, fallback: current_best}
+  hybrid_a:
+    forecaster: normals_hybrid
+    params:
+      components:
+        annual_avg_temp: {forecaster: ten_year_mean}
+        total_precip_in:
+          forecaster: ewma_normal
+          params: {alphas: [0.03, 0.05, 0.1, 0.15, 0.2, 0.3]}
+        hottest_day_temp:
+          forecaster: gev_hottest_day
+          params: {trend: false}
+        cdd:
+          forecaster: ewma_normal
+          params: {alphas: [0.03, 0.05, 0.1, 0.15, 0.2, 0.3]}
+
+reference: current_best
+# Chosen from this trial's backtest only (never leaderboard scores). The methods did not beat
+# current_best convincingly: hybrid_a has a higher mean raw score (all 3.25 vs 2.92, years 4-7
+# 4.90 vs 4.68) but its years 4-7 gain comes from one origin (1980), it ties at 1995 and loses
+# at 2011, and its components were picked after seeing these results. The only single method
+# level with current_best in years 4-7 is gev_stationary (4.69 vs 4.68, a tie: its hottest-day
+# median is almost the 30-year mean). The methods did not beat current_best, so the
+# submission stays current_best.
+submit: current_best

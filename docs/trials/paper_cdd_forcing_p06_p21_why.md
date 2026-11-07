@@ -1,6 +1,6 @@
 # Why analysis: paper_cdd_forcing_p06_p21
 
-Run dir `runs/trials/20261107-170003_paper_cdd_forcing_p06_p21`. Written by `scripts/analyze_cdd_forcing_p06_p21.py`. Mean raw score over the three ADR 0004 origins (1980, 1995, 2011); `years_4_7` matches the Final Score. Best new variant by mean years 4-7 raw score: **`hybrid_ridge_shift30_avg`** (best of 11 new variants, so its edge carries selection optimism).
+Run dir `runs/trials/20261107-171827_paper_cdd_forcing_p06_p21`. Written by `scripts/analyze_cdd_forcing_p06_p21.py`. Mean raw score over the three ADR 0004 origins (1980, 1995, 2011); `years_4_7` matches the Final Score. Best new variant by mean years 4-7 raw score: **`hybrid_ridge_shift30_avg`** (best of 11 new variants, so its edge carries selection optimism).
 
 ## Score table
 

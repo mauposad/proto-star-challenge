@@ -20,3 +20,4 @@ Validation metrics come from `runs/<run>/metrics.json`. List the official metric
 
 | Date | Who | Run dir | Public score | Notes |
 |---|---|---|---|---|
+| 2026-11-07 | team (GitHub Actions run [42332802586](https://github.com/mauposad/proto-star-challenge/actions/runs/42332802586), repo commit `f76ac3c`) | `configs/mp_baselines_round1.yaml`, forecaster `current_best` → HF [`MekkoMau/protostar-climate-MKDir@a008301`](https://huggingface.co/datasets/MekkoMau/protostar-climate-MKDir/commit/a008301729a3d6f016b2f0a1779ef1c3e3e1332b) | TBD | First scored submission. Pasted into the challenge Space. Per metric: 10-year mean for temperature/CDD, 30-year mean for precipitation/hottest day. Backtest raw score (ADR 0004 folds): all 2.92, years 1–3 0.63, years 4–7 4.68 |

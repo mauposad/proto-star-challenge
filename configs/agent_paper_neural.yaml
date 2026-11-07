@@ -1,0 +1,103 @@
+# Trial: P05 N-BEATS and P08 DeepAR, trained from scratch on CPU (papers/README.md).
+# Run:    uv run proto-star climate-trial configs/agent_paper_neural.yaml --record
+# Package: uv run proto-star climate-package configs/agent_paper_neural.yaml
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+# Needs torch: `uv sync --extra hf`.  Early stopping uses the last 7 years *inside* each
+# training fold (`holdout`), never the fold's test years.
+name: paper_neural
+description: >
+  Neural forecasters from P05 (N-BEATS, generic and trend+generic stacks, median ensemble over
+  lookbacks 14/21/28 and 3 seeds) and P08 (DeepAR, one global Gaussian LSTM over all series,
+  median of sample paths over 3 seeds), each on all four metrics and as a hybrid that applies
+  the network to temperature and CDD only and keeps current_best for precipitation and the
+  hottest day.
+
+forecasters:
+  - current_best          # reference: 10y mean for temperature/CDD, 30y mean for precip/hottest day
+  - ten_year_mean
+  - nbeats_generic
+  - nbeats_interpretable
+  - nbeats_hybrid
+  - deepar_global
+  - deepar_hybrid
+  - nbeats_hybrid_seed7   # same as nbeats_hybrid, other seed: is the hybrid's edge seed noise?
+  - deepar_hybrid_seed7   # same as deepar_hybrid, other seed
+
+variants:
+  nbeats_generic:
+    forecaster: nbeats_p05
+    params: &nbeats
+      architecture: generic
+      lookbacks: [14, 21, 28]
+      losses: [l1]
+      seeds: 3
+      seed: 20190510
+      width: 64
+      layers: 2
+      generic_blocks: 3
+      trend_blocks: 2
+      degree: 2
+      max_epochs: 200
+      patience: 20
+      batch_size: 1024
+      learning_rate: 0.001
+      weight_decay: 0.0
+      min_obs_fraction: 0.5
+      holdout: 7
+      threads: 2
+  nbeats_interpretable:
+    forecaster: nbeats_p05
+    params:
+      <<: *nbeats
+      architecture: interpretable
+      generic_blocks: 1
+  nbeats_hybrid:
+    forecaster: nbeats_p05
+    params:
+      <<: *nbeats
+      neural_metrics: [annual_avg_temp, cdd]
+  deepar_global:
+    forecaster: deepar_p08
+    params: &deepar
+      context: 21
+      hidden: 32
+      layers: 2
+      dropout: 0.1
+      metric_dim: 4
+      city_dim: 4
+      seeds: 3
+      seed: 20170411
+      samples: 100
+      max_epochs: 40
+      patience: 6
+      batch_size: 512
+      learning_rate: 0.001
+      weight_decay: 0.0
+      min_obs_fraction: 0.5
+      holdout: 7
+      threads: 2
+  deepar_hybrid:
+    forecaster: deepar_p08
+    params:
+      <<: *deepar
+      neural_metrics: [annual_avg_temp, cdd]
+
+  nbeats_hybrid_seed7:
+    forecaster: nbeats_p05
+    params:
+      <<: *nbeats
+      neural_metrics: [annual_avg_temp, cdd]
+      seed: 7
+  deepar_hybrid_seed7:
+    forecaster: deepar_p08
+    params:
+      <<: *deepar
+      neural_metrics: [annual_avg_temp, cdd]
+      seed: 7
+
+reference: current_best
+# Chosen from this trial's backtest only (never leaderboard scores). The neural models did NOT
+# beat current_best: deepar_hybrid had the best mean raw score but won only 1 of 3 origins in
+# years 4-7 (2011), and its seed-7 replica fell below current_best in years 4-7. The full-metric
+# N-BEATS and DeepAR variants lose on precipitation and the hottest day. So we keep current_best.
+submit: current_best

@@ -9,7 +9,8 @@ forecaster defeats this protection, and nothing here can detect it.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 import pandas as pd
 
@@ -29,8 +30,9 @@ from proto_star.climate import (
     official_score,
     validate_submission,
 )
+from proto_star.forecasters.registry import Forecaster
 
-Forecaster = Callable[[pd.DataFrame, int, list[int]], pd.DataFrame]
+__all__ = ["Forecaster"]  # re-exported: forecasters and scripts import it from here
 
 DEFAULT_HORIZON = 7
 # Forecast lead in years. 1-3 mirrors the Live Score (2019-2021), 4-7 the Final Score (2022-2025).
@@ -73,13 +75,20 @@ def ensemble_forecaster(methods: Mapping[str, str] = CURRENT_BEST_METHODS) -> Fo
 
 
 def resolve_forecaster(
-    name: str, ensembles: Mapping[str, Mapping[str, str]] | None = None
+    name: str,
+    ensembles: Mapping[str, Mapping[str, str]] | None = None,
+    variants: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> Forecaster:
     """Look up a forecaster by the name used in trial configs.
 
     ``current_best`` is the team's current ensemble, a built-in baseline name is that
     baseline, and anything in ``ensembles`` is a metric-to-baseline mapping from the config.
+    A name in ``variants`` is a registered forecaster (``proto_star.forecasters``) with the
+    hyperparameters given in the config, as ``{"forecaster": <registered>, "params": {...}}``.
+    A registered name used directly runs with its default hyperparameters.
     """
+    from proto_star.forecasters import load_all
+
     if ensembles and name in ensembles:
         mapping = dict(ensembles[name])
         if set(mapping) != set(METRICS):
@@ -92,9 +101,21 @@ def resolve_forecaster(
         return ensemble_forecaster()
     if name in BASELINE_METHODS:
         return baseline_forecaster(name)
+    registry = load_all()
+    if variants and name in variants:
+        target = variants[name]["forecaster"]
+        if target not in registry:
+            raise ValueError(
+                f"variant {name!r} uses unregistered forecaster {target!r}; "
+                f"registered: {sorted(registry)}"
+            )
+        return registry[target].build(variants[name].get("params"))
+    if name in registry:
+        return registry[name].build()
     raise ValueError(
         f"unknown forecaster {name!r}; use {CURRENT_BEST!r}, one of {list(BASELINE_METHODS)}, "
-        "or define it under `ensembles` in the trial config"
+        f"a registered forecaster {sorted(registry)}, "
+        "or define it under `ensembles` or `variants` in the trial config"
     )
 
 

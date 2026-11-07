@@ -37,6 +37,7 @@ from proto_star.trial import (
     describe_forecaster,
     load_trial_config,
     markdown_table,
+    registered_entry,
 )
 
 RAW_INPUTS = ("annual_indices.parquet", "city_info.parquet")
@@ -95,7 +96,7 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _copy_code(code_dir: Path, config_path: Path) -> None:
+def _copy_code(code_dir: Path, config_path: Path, extra: tuple[str, ...] = ()) -> None:
     ignore = shutil.ignore_patterns("__pycache__", "*.pyc")
     shutil.copytree(
         PROJECT_ROOT / "src" / "proto_star", code_dir / "src" / "proto_star", ignore=ignore
@@ -110,17 +111,24 @@ def _copy_code(code_dir: Path, config_path: Path) -> None:
     shutil.copyfile(config_path, code_dir / "trial.yaml")
     (code_dir / "reproduce.py").write_text(REPRODUCE_SCRIPT)
     (code_dir / "README.md").write_text(CODE_README)
-    (code_dir / "requirements.txt").write_text("\n".join(_runtime_pins()) + "\n")
+    (code_dir / "requirements.txt").write_text("\n".join(_runtime_pins(extra)) + "\n")
 
 
-def _runtime_pins() -> list[str]:
-    """Pin every runtime dependency of proto-star (extras excluded) to the installed version."""
+# Wheel indexes a reader needs for some optional packages (local versions like 2.5.1+cpu).
+EXTRA_INDEXES = {"torch": "https://download.pytorch.org/whl/cpu"}
+
+
+def _runtime_pins(extra: tuple[str, ...] = ()) -> list[str]:
+    """Pin proto-star's core dependencies plus ``extra`` (what the submitted forecaster
+    declares in the registry) to the installed versions."""
     names = [
         re.split(r"[<>=!~;\s\[(]", req, maxsplit=1)[0]
         for req in metadata.requires("proto-star") or []
         if "extra ==" not in req
     ]
-    return sorted(f"{name}=={metadata.version(name)}" for name in names)
+    pins = sorted(f"{name}=={metadata.version(name)}" for name in {*names, *extra})
+    indexes = sorted({EXTRA_INDEXES[name] for name in extra if name in EXTRA_INDEXES})
+    return [f"--extra-index-url {url}" for url in indexes] + pins
 
 
 def _copy_data(data_dir: Path, master_dir: Path, raw_dir: Path) -> list[Path]:
@@ -333,7 +341,8 @@ def build_package(
     out_dir = out_root / f"{now.strftime('%Y%m%d-%H%M%S')}_{cfg.name}"
     out_dir.mkdir(parents=True, exist_ok=False)
     submission.to_csv(out_dir / "submission.csv", index=False)
-    _copy_code(out_dir / "code", config_path)
+    entry = registered_entry(name, cfg)
+    _copy_code(out_dir / "code", config_path, entry.requires if entry else ())
     files = _copy_data(out_dir / "data", master_dir, raw_dir)
     manifest = json.loads((master_dir / MANIFEST_FILE).read_text())
     (out_dir / "data" / "README.md").write_text(_data_card(files, manifest))

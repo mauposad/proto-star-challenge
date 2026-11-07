@@ -15,6 +15,16 @@ Compare every built-in baseline, including the new 15-year mean, hinge fit and m
 | Reference | `current_best` |
 | Submit candidate | `current_best` |
 
+## Submitted
+
+| Item | Value |
+|---|---|
+| Forecaster | `current_best` |
+| Built and uploaded by | GitHub Actions `Publish submission`, run [42332802586](https://github.com/mauposad/proto-star-challenge/actions/runs/42332802586), repo commit `f76ac3c`, 2026-11-07 03:16 UTC |
+| Hugging Face dataset | [`MekkoMau/protostar-climate-MKDir`](https://huggingface.co/datasets/MekkoMau/protostar-climate-MKDir), commit [`a008301`](https://huggingface.co/datasets/MekkoMau/protostar-climate-MKDir/commit/a008301729a3d6f016b2f0a1779ef1c3e3e1332b) |
+| Space submission | Link pasted in the challenge Space by the team |
+| Public score | TBD |
+
 ## Reproduce
 
 ```bash

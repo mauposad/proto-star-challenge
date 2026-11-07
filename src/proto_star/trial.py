@@ -31,8 +31,18 @@ from proto_star.backtest import (
 )
 from proto_star.climate import BASELINE_DESCRIPTIONS, DEFAULT_CUTOFFS, METRICS
 from proto_star.data.master import content_hash, load_master
+from proto_star.forecasters import RegisteredForecaster, load_all
 from proto_star.paths import PROJECT_ROOT, TRIAL_NOTES_DIR, TRIALS_DIR
 from proto_star.tracking import git_info, write_json
+
+
+class Variant(BaseModel):
+    """A registered forecaster run with hyperparameters from the config."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    forecaster: str  # name registered in proto_star.forecasters
+    params: dict[str, Any] = Field(default_factory=dict)
 
 
 class TrialConfig(BaseModel):
@@ -44,6 +54,7 @@ class TrialConfig(BaseModel):
     description: str
     forecasters: list[str] = Field(min_length=1)
     ensembles: dict[str, dict[str, str]] = Field(default_factory=dict)
+    variants: dict[str, Variant] = Field(default_factory=dict)
     reference: str = CURRENT_BEST  # what "beats the baseline" is counted against
     submit: str | None = None  # forecaster to package; pick it from validation results only
 
@@ -54,6 +65,9 @@ class TrialConfig(BaseModel):
             raise ValueError(f"reference {self.reference!r} must be one of the forecasters")
         if self.submit is not None and self.submit not in known:
             raise ValueError(f"submit {self.submit!r} must be one of the forecasters")
+        clash = sorted(set(self.variants) & set(self.ensembles))
+        if clash:
+            raise ValueError(f"names {clash} are defined as both a variant and an ensemble")
         return self
 
 
@@ -64,7 +78,18 @@ def load_trial_config(path: Path) -> TrialConfig:
 
 def build_forecasters(cfg: TrialConfig) -> dict[str, Forecaster]:
     """Turn the names in a config into callable forecasters."""
-    return {name: resolve_forecaster(name, cfg.ensembles) for name in cfg.forecasters}
+    variants = {name: variant.model_dump() for name, variant in cfg.variants.items()}
+    return {name: resolve_forecaster(name, cfg.ensembles, variants) for name in cfg.forecasters}
+
+
+def registered_entry(name: str, cfg: TrialConfig) -> RegisteredForecaster | None:
+    """The registry entry behind a config name, or None for baselines and ensembles."""
+    registry = load_all()
+    if name in cfg.variants:
+        return registry.get(cfg.variants[name].forecaster)
+    if name in cfg.ensembles or name == CURRENT_BEST or name in BASELINE_DESCRIPTIONS:
+        return None
+    return registry.get(name)
 
 
 def describe_forecaster(name: str, cfg: TrialConfig) -> str:
@@ -73,6 +98,11 @@ def describe_forecaster(name: str, cfg: TrialConfig) -> str:
         return "Per metric: " + ", ".join(f"{m}={cfg.ensembles[name][m]}" for m in METRICS)
     if name == CURRENT_BEST:
         return "Per metric: " + ", ".join(f"{m}={CURRENT_BEST_METHODS[m]}" for m in METRICS)
+    entry = registered_entry(name, cfg)
+    if entry is not None:
+        params = cfg.variants[name].params if name in cfg.variants else {}
+        settings = ", ".join(f"{k}={v}" for k, v in sorted(params.items())) or "defaults"
+        return f"{entry.description} (`{entry.name}`; {settings})"
     return BASELINE_DESCRIPTIONS[name]
 
 

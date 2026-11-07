@@ -1,0 +1,37 @@
+# Trial: paper P13, Lai & Dzombak 2020 ARIMA (papers/2020_lai_arima/README.md).
+# Run:    uv run proto-star climate-trial configs/agent_paper_p13_arima.yaml --record
+# Package: uv run proto-star climate-package configs/agent_paper_p13_arima.yaml
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+# n_jobs is the number of worker processes (at most 5: the machine is shared).
+name: paper_p13_arima
+description: >
+  Per-city ARIMA after Lai and Dzombak (2020): KPSS differencing, stepwise AICc order,
+  drift when Mann-Kendall p < 0.2, Box-Cox when residuals are non-normal, full history.
+  Variants beyond the paper: a 50-year history window, and ARIMA for temperature and CDD
+  only with current_best for precipitation and hottest day.
+
+forecasters:
+  - current_best          # reference: 10y mean for temperature/CDD, 30y mean for precip/hottest day
+  - ten_year_mean
+  - arima_paper           # the paper's settings, full history
+  - arima_window50        # beyond the paper: only the last 50 calendar years
+  - arima_temp_cdd        # beyond the paper: ARIMA for temperature/CDD, current_best otherwise
+
+variants:
+  arima_paper:
+    forecaster: arima_lai2020
+    params: {n_jobs: 5}
+  arima_window50:
+    forecaster: arima_lai2020
+    params: {history_years: 50, n_jobs: 5}
+  arima_temp_cdd:
+    forecaster: arima_lai2020
+    params: {metrics: [annual_avg_temp, cdd], n_jobs: 5}
+
+reference: current_best
+# Chosen from this trial's backtest only (never leaderboard scores). The paper's ARIMA did not
+# beat current_best: mean raw score all / years 1-3 / years 4-7 was 0.26 / -0.96 / 1.06 against
+# 2.92 / 0.63 / 4.68. No ARIMA variant beat it at any origin over all years; in years 4-7 only
+# arima_window50 at 2011 did (1 of 3), and in years 1-3 arima_temp_cdd won 2 of 3 but still
+# lost on the mean over all years and years 4-7. The submission stays current_best.
+submit: current_best

@@ -7,9 +7,9 @@ Add a non-negative pooled warming trend to each city's recent level, for tempera
 
 | Item | Value |
 |---|---|
-| Date | 2026-11-06 |
+| Date | 2026-11-07 |
 | Config | `configs\lc_pooled_trend.yaml` |
-| Code version | `70445e1` (uncommitted changes) |
+| Code version | `60f00c5` |
 | Data | `data/processed/protostar/annual_master.parquet`, content hash `99128065d035cf531fe13c214e514b6bb73927ae90a80a9b903949d13abb04d1` |
 | Folds | cut-offs [1980, 1995, 2011], 7-year horizon (ADR 0004) |
 | Reference | `thirty_year_mean` |

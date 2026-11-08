@@ -1,0 +1,165 @@
+# Trial: forecast combinations, papers P16 (M4, Makridakis et al. 2018) and P17 (Smith & Wallis
+# 2009, the forecast combination puzzle), with P18 (combination review) as context.
+# Replication step 11 and open question 2 of docs/trials/papers_round1_summary.md.
+# Card: papers/2018_makridakis_combinations/README.md
+# Run:     uv run proto-star climate-trial configs/agent_paper_combos_p16_p17.yaml --record
+# Package: uv run proto-star climate-package configs/agent_paper_combos_p16_p17.yaml
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+#
+# Fixed BEFORE the first run (2026-11-07): the member sets, the combiners and the 10 variants
+# below. Members are the round-1 forecasters with their round-1 definitions copied verbatim from
+# configs/agent_paper_p09_p14_pooled.yaml (ridge), agent_paper_neural.yaml (DeepAR, seed
+# 20170411, threads 2 as in round 1), agent_paper_normals_gev.yaml (ewma_opt) and
+# agent_paper_p13_arima.yaml (arima_temp_cdd; n_jobs 3 instead of 5 for this machine: it is a
+# process count and does not change the forecasts). Precipitation and the hottest day stay on
+# current_best (round 1: nothing beat the 30-year mean there).
+# The member_* rows are reproduction checks: one member through the combiner, which must match
+# the round-1 scores of that member on its metrics. They are not candidates.
+# inverse_mse weights come from in-train hindcasts (pseudo-origins cutoff-7 and cutoff-14), never
+# from the fold's test years.
+name: combos_p16_p17
+description: >
+  Equal-weight forecast combinations of round-1 forecasters (P16/P17): for CDD the pooled ridge,
+  DeepAR, the hindcast-chosen EWMA and ARIMA; for temperature the 10-year mean, EWMA, DeepAR and
+  ARIMA; current_best for precipitation and the hottest day. Mean, median and a trimmed mean,
+  ablations without the neural member and with CDD combined only, inverse-MSE weights from
+  in-train hindcasts as the P17 contrast, and a second DeepAR seed as a robustness replica.
+
+forecasters:
+  # references
+  - current_best          # 10y mean for temperature/CDD, 30y mean for precip/hottest day
+  - ten_year_mean
+  - hybrid_ridge_all_cdd  # round-1 best, submitted (ADR 0005)
+  # reproduction checks (one member through the combiner; not candidates)
+  - member_deepar
+  - member_ewma
+  - member_arima
+  # candidates (8) and seed replicas (2): fixed before the first run
+  - combo_mean
+  - combo_median
+  - combo_trimmed
+  - combo_inv_mse
+  - combo_mean_no_neural
+  - combo_mean_cdd_only
+  - combo_median_cdd_only
+  - combo_mean_cdd_only_no_neural
+  - combo_mean_seed7            # combo_mean with DeepAR seed 7 (round-1 replica seed)
+  - combo_mean_cdd_only_seed7   # combo_mean_cdd_only with DeepAR seed 7
+
+variants:
+  hybrid_ridge_all_cdd:  # copied from configs/agent_paper_p09_p14_pooled.yaml
+    forecaster: pooled_hybrid_p09_p14
+    params: {model_metrics: [cdd], estimator: ridge, alpha: 1.0, train_years: null}
+
+  member_deepar:
+    forecaster: forecast_combination_torch
+    params:
+      combine: {cdd: [deepar], annual_avg_temp: [deepar]}
+      # The member definitions, anchored here and reused by every variant below.
+      members: &members
+        ridge:  # = hybrid_ridge_all_cdd
+          forecaster: pooled_hybrid_p09_p14
+          params: {model_metrics: [cdd], estimator: ridge, alpha: 1.0, train_years: null}
+        deepar:  # = deepar_hybrid
+          forecaster: deepar_p08
+          params: &deepar_params
+            context: 21
+            hidden: 32
+            layers: 2
+            dropout: 0.1
+            metric_dim: 4
+            city_dim: 4
+            seeds: 3
+            seed: 20170411
+            samples: 100
+            max_epochs: 40
+            patience: 6
+            batch_size: 512
+            learning_rate: 0.001
+            weight_decay: 0.0
+            min_obs_fraction: 0.5
+            holdout: 7
+            threads: 2
+            neural_metrics: [annual_avg_temp, cdd]
+        deepar7:  # = deepar_hybrid_seed7
+          forecaster: deepar_p08
+          params:
+            <<: *deepar_params
+            seed: 7
+        ewma:  # = ewma_opt
+          forecaster: ewma_normal
+          params: {alphas: [0.03, 0.05, 0.1, 0.15, 0.2, 0.3]}
+        arima:  # = arima_temp_cdd
+          forecaster: arima_lai2020
+          params: {metrics: [annual_avg_temp, cdd], n_jobs: 3}
+        ten:
+          forecaster: ten_year_mean
+  member_ewma:
+    forecaster: forecast_combination
+    params: {members: *members, combine: {cdd: [ewma], annual_avg_temp: [ewma]}}
+  member_arima:
+    forecaster: forecast_combination
+    params: {members: *members, combine: {cdd: [arima], annual_avg_temp: [arima]}}
+
+  combo_mean:
+    forecaster: forecast_combination_torch
+    params: &all4
+      members: *members
+      combine:
+        cdd: [ridge, deepar, ewma, arima]
+        annual_avg_temp: [ten, ewma, deepar, arima]
+      method: mean
+  combo_median:
+    forecaster: forecast_combination_torch
+    params: {<<: *all4, method: median}
+  combo_trimmed:  # drop the member farthest from the median, average the other three
+    forecaster: forecast_combination_torch
+    params: {<<: *all4, method: trimmed}
+  combo_inv_mse:  # P17 contrast: estimated weights, in-train hindcasts only
+    forecaster: forecast_combination_torch
+    params: {<<: *all4, method: inverse_mse, n_origins: 2, step: 7}
+  combo_mean_no_neural:
+    forecaster: forecast_combination
+    params:
+      members: *members
+      combine:
+        cdd: [ridge, ewma, arima]
+        annual_avg_temp: [ten, ewma, arima]
+      method: mean
+  combo_mean_cdd_only:
+    forecaster: forecast_combination_torch
+    params: &cdd4
+      members: *members
+      combine: {cdd: [ridge, deepar, ewma, arima]}
+      method: mean
+  combo_median_cdd_only:
+    forecaster: forecast_combination_torch
+    params: {<<: *cdd4, method: median}
+  combo_mean_cdd_only_no_neural:
+    forecaster: forecast_combination
+    params:
+      members: *members
+      combine: {cdd: [ridge, ewma, arima]}
+      method: mean
+  combo_mean_seed7:
+    forecaster: forecast_combination_torch
+    params:
+      members: *members
+      combine:
+        cdd: [ridge, deepar7, ewma, arima]
+        annual_avg_temp: [ten, ewma, deepar7, arima]
+      method: mean
+  combo_mean_cdd_only_seed7:
+    forecaster: forecast_combination_torch
+    params:
+      members: *members
+      combine: {cdd: [ridge, deepar7, ewma, arima]}
+      method: mean
+
+reference: current_best
+# Chosen from this trial's backtest only (never leaderboard scores). No combination beat
+# hybrid_ridge_all_cdd (3.60 / 0.94 / 5.54, all / years 1-3 / years 4-7): the best fixed
+# candidate in years 4-7, combo_mean_cdd_only, scored 3.49 / 0.99 / 5.37. Combining with the
+# weaker CDD members (DeepAR, EWMA, ARIMA) dilutes the pooled ridge. Inverse-MSE weights scored
+# like equal weights (4.92 vs 4.91 in years 4-7). So the submission stays hybrid_ridge_all_cdd.
+submit: hybrid_ridge_all_cdd

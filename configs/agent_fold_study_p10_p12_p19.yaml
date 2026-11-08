@@ -1,0 +1,64 @@
+# Fold design study (papers P10, P12, P19): do the three ADR 0004 cut-offs rank methods the same
+# way as a denser set of rolling pre-2019 origins, and does weighting recent origins change the pick?
+# Run:    uv run python scripts/fold_study_p10_p12_p19.py run --run-id <id> [--only <name> ...]
+# Report: uv run python scripts/fold_study_p10_p12_p19.py report --run-id <id>
+# This is an evaluation study. It changes neither DEFAULT_CUTOFFS nor the ADR 0004 folds.
+# Everything under `study:` was fixed before the first run. Variant definitions are copied
+# verbatim from the round-1 configs (agent_paper_p09_p14_pooled, agent_paper_normals_gev,
+# agent_paper_p13_arima), except arima n_jobs (3, this machine has 3 cores).
+# DeepAR and N-BEATS are left out: too heavy for this laptop across 12 origins.
+name: fold_study_p10_p12_p19
+description: >
+  Re-score the round-1 reference methods and best non-neural variants on rolling origins every
+  3 years from 1980 to 2010 plus 2011 (12 origins, a superset of the ADR 0004 folds), and
+  compare the 3-fold ranking with the dense ranking, its stability, and recency-weighted picks.
+
+forecasters:
+  - current_best
+  - ten_year_mean
+  - thirty_year_mean      # the scoring reference: raw score 0 by construction
+  - linear_trend
+  - hybrid_ridge_all_cdd  # ADR 0005 submission
+  - hybrid_a
+  - gev_stationary
+  - arima_temp_cdd        # slowest: run last
+
+variants:
+  hybrid_ridge_all_cdd:
+    forecaster: pooled_hybrid_p09_p14
+    params: {model_metrics: [cdd], estimator: ridge, alpha: 1.0, train_years: null}
+  hybrid_a:
+    forecaster: normals_hybrid
+    params:
+      components:
+        annual_avg_temp: {forecaster: ten_year_mean}
+        total_precip_in:
+          forecaster: ewma_normal
+          params: {alphas: [0.03, 0.05, 0.1, 0.15, 0.2, 0.3]}
+        hottest_day_temp:
+          forecaster: gev_hottest_day
+          params: {trend: false}
+        cdd:
+          forecaster: ewma_normal
+          params: {alphas: [0.03, 0.05, 0.1, 0.15, 0.2, 0.3]}
+  gev_stationary:
+    forecaster: gev_hottest_day
+    params: {window: 30, trend: false, fallback: current_best}
+  arima_temp_cdd:
+    forecaster: arima_lai2020
+    params: {metrics: [annual_avg_temp, cdd], n_jobs: 3}
+
+study:
+  # Rolling origins: first..last every `step` years, plus `extra`. Last cut-off <= 2011 so the
+  # 7-year horizon ends <= 2018 (team data cut-off).
+  first_cutoff: 1980
+  last_cutoff: 2010
+  step: 3
+  extra_cutoffs: [2011]
+  references: [current_best, hybrid_ridge_all_cdd]
+  # Recency weights, fixed before looking. linear: weight proportional to the origin's position
+  # (1, 2, ..., n). exponential: weight halves every `half_life_years` back from the last origin.
+  half_life_years: 10.0
+  # Origin bootstrap for the stability of the top pick.
+  n_bootstrap: 2000
+  seed: 20261107

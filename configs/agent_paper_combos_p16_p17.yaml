@@ -157,4 +157,9 @@ variants:
       method: mean
 
 reference: current_best
-submit: hybrid_ridge_all_cdd  # placeholder until the backtest is read; decided from it only
+# Chosen from this trial's backtest only (never leaderboard scores). No combination beat
+# hybrid_ridge_all_cdd (3.60 / 0.94 / 5.54, all / years 1-3 / years 4-7): the best fixed
+# candidate in years 4-7, combo_mean_cdd_only, scored 3.49 / 0.99 / 5.37. Combining with the
+# weaker CDD members (DeepAR, EWMA, ARIMA) dilutes the pooled ridge. Inverse-MSE weights scored
+# like equal weights (4.92 vs 4.91 in years 4-7). So the submission stays hybrid_ridge_all_cdd.
+submit: hybrid_ridge_all_cdd

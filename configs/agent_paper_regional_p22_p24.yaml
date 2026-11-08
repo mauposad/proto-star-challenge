@@ -1,0 +1,112 @@
+# Trial: papers P22 (Haug et al. 2020, hierarchical / partially pooled trends; replication step 7)
+# and P24 (Hausfather et al. 2013, urbanization; pooling groups, replication step 12).
+# Card: papers/2020_haug_regional_trends/README.md
+# Data:   uv run python scripts/download_regional_p22_p24.py   (static city attributes, ~13 MB)
+# Run:    uv run proto-star climate-trial configs/agent_paper_regional_p22_p24.yaml --record
+# Package: uv run proto-star climate-package configs/agent_paper_regional_p22_p24.yaml
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+# The 12 variants below were fixed before the first run. Every one is reported, losers included.
+# Band edges (elevation in m; population = 2010 Census, largest place within 20 km) were set
+# from the attribute table alone (rough terciles), never from scores.
+name: regional_p22_p24
+description: >
+  P22: each city's 30-year trend shrunk toward its region's (or elevation band's) trend by
+  empirical-Bayes partial pooling, added (damped) to the 10-year level, for temperature and CDD.
+  P24: the round-1 pooled ridge for CDD with pooling groups (region, elevation band, population
+  band, NLCD 2016 land cover) as group interactions, separate models or one-hots.
+  Precipitation and hottest day keep current_best everywhere.
+
+forecasters:
+  - current_best          # reference: 10y mean for temperature/CDD, 30y mean for precip/hottest day
+  - ten_year_mean
+  - hybrid_ridge_all_cdd  # round-1 best (ADR 0005), copied from agent_paper_p09_p14_pooled.yaml
+  # P22: partially pooled trends on the 10-year level (temperature + CDD)
+  - p22_eb_region
+  - p22_eb_region_damped
+  - p22_eb_region_flat     # control: trend only brings the level up to the cutoff, no lead extrapolation
+  - p22_region_trend_damped
+  - p22_eb_elevation_damped
+  - p22_eb_region_long_damped
+  # P24: pooled ridge with pooling groups (CDD only, as hybrid_ridge_all_cdd)
+  - p24_ridge_region_interact
+  - p24_ridge_elevation_interact
+  - p24_ridge_population_interact
+  - p24_ridge_landcover_interact
+  - p24_ridge_region_separate
+  - p24_ridge_all_groups_additive
+
+variants:
+  hybrid_ridge_all_cdd:
+    forecaster: pooled_hybrid_p09_p14
+    params: {model_metrics: [cdd], estimator: ridge, alpha: 1.0, train_years: null}
+
+  p22_eb_region:
+    forecaster: regional_trend_p22
+    params: {group_by: region, shrink: eb, trend_years: 30, level_years: 10, damping: 1.0}
+  p22_eb_region_damped:
+    forecaster: regional_trend_p22
+    params: {group_by: region, shrink: eb, trend_years: 30, level_years: 10, damping: 0.5}
+  p22_eb_region_flat:
+    forecaster: regional_trend_p22
+    params:
+      group_by: region
+      shrink: eb
+      trend_years: 30
+      level_years: 10
+      damping: 1.0
+      extrapolate_lead: false
+  p22_region_trend_damped:
+    forecaster: regional_trend_p22
+    params: {group_by: region, shrink: group, trend_years: 30, level_years: 10, damping: 0.5}
+  p22_eb_elevation_damped:
+    forecaster: regional_trend_p22
+    params:
+      group_by: elevation
+      shrink: eb
+      trend_years: 30
+      level_years: 10
+      damping: 0.5
+      bands: {elevation: [130.0, 310.0]}
+  p22_eb_region_long_damped:
+    forecaster: regional_trend_p22
+    params: {group_by: region, shrink: eb, trend_years: 50, level_years: 10, damping: 0.5}
+
+  p24_ridge_region_interact:
+    forecaster: pooled_groups_p24
+    params: {group_by: [region], mode: interact, model_metrics: [cdd], alpha: 1.0, train_years: null}
+  p24_ridge_elevation_interact:
+    forecaster: pooled_groups_p24
+    params:
+      group_by: [elevation]
+      mode: interact
+      model_metrics: [cdd]
+      alpha: 1.0
+      train_years: null
+      bands: {elevation: [130.0, 310.0]}
+  p24_ridge_population_interact:
+    forecaster: pooled_groups_p24
+    params:
+      group_by: [population]
+      mode: interact
+      model_metrics: [cdd]
+      alpha: 1.0
+      train_years: null
+      bands: {population: [50000.0, 175000.0]}
+  p24_ridge_landcover_interact:
+    forecaster: pooled_groups_p24
+    params: {group_by: [land_cover], mode: interact, model_metrics: [cdd], alpha: 1.0, train_years: null}
+  p24_ridge_region_separate:
+    forecaster: pooled_groups_p24
+    params: {group_by: [region], mode: separate, model_metrics: [cdd], alpha: 1.0, train_years: null}
+  p24_ridge_all_groups_additive:
+    forecaster: pooled_groups_p24
+    params:
+      group_by: [elevation, population, land_cover]
+      mode: additive
+      model_metrics: [cdd]
+      alpha: 1.0
+      train_years: null
+      bands: {elevation: [130.0, 310.0], population: [50000.0, 175000.0]}
+
+reference: current_best
+submit: hybrid_ridge_all_cdd

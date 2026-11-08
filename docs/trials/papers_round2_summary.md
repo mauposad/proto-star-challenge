@@ -89,7 +89,7 @@ All four packages submit `hybrid_ridge_all_cdd`. The C, B and D `submission.csv`
 
 | Branch | Head | Config | `submit` | Dry run | Local package (git-ignored) |
 |---|---|---|---|---|---|
-| `agent/paper-p16-p17-combos` | `e746d13` | `configs/agent_paper_combos_p16_p17.yaml` | `hybrid_ridge_all_cdd` | [42437304105](https://github.com/mauposad/proto-star-challenge/actions/runs/42437304105) | `.claude/worktrees/combos/submissions/20261107-183531_combos_p16_p17` |
+| `agent/paper-p16-p17-combos` | `e746d13` | `configs/agent_paper_combos_p16_p17.yaml` | `hybrid_ridge_all_cdd` | [42437304105](https://github.com/mauposad/proto-star-challenge/actions/runs/42437304105) | not kept (same `hybrid_ridge_all_cdd` file; rebuild from the config) |
 | `agent/paper-p22-p24-regional` | `3ee90fa` | `configs/agent_paper_regional_p22_p24.yaml` | `hybrid_ridge_all_cdd` | [42421025087](https://github.com/mauposad/proto-star-challenge/actions/runs/42421025087) | `submissions/20261107-180317_regional_p22_p24` |
 | `agent/paper-p15-station` | `294a1e5` | `configs/agent_paper_station_p15.yaml` | `hybrid_ridge_all_cdd` | [42419919506](https://github.com/mauposad/proto-star-challenge/actions/runs/42419919506) | `submissions/20261107-180155_station_p15` |
 | `agent/paper-p06-p21-cdd-forcing` | `9cab4ee` | `configs/agent_paper_cdd_forcing_p06_p21.yaml` | `hybrid_ridge_all_cdd` | [42421089511](https://github.com/mauposad/proto-star-challenge/actions/runs/42421089511) | `submissions/20261107-180407_paper_cdd_forcing_p06_p21` |

@@ -1,0 +1,36 @@
+# Trial: a shared warming trend on top of each city's recent level.
+# Run:    uv run proto-star climate-trial configs/lc_pooled_trend.yaml --record
+# Check:  uv run python scripts/robustness_origins.py configs/lc_pooled_trend.yaml
+# Package: uv run proto-star climate-package configs/lc_pooled_trend.yaml
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+name: pooled_trend
+description: >
+  Add a non-negative pooled warming trend to each city's recent level, for temperature and CDD.
+  Compare one level window against two, and a CDD trend shared by all cities against one scaled
+  by each city's own CDD per degree. Precipitation and hottest day stay on the 30-year mean.
+
+forecasters:
+  - thirty_year_mean      # reference: the official baseline
+  - current_best          # the team's current submission
+  - trend_level10
+  - trend_level10_15
+  - trend_level10_15_sensitivity
+
+pooled_trends:
+  trend_level10:
+    level_years: [10]
+    trend_window: 40
+    cdd_sensitivity: false
+  trend_level10_15:
+    level_years: [10, 15]
+    trend_window: 40
+    cdd_sensitivity: false
+  trend_level10_15_sensitivity:
+    level_years: [10, 15]
+    trend_window: 40
+    cdd_sensitivity: true
+
+reference: thirty_year_mean
+# Chosen from validation results only (never leaderboard scores). See docs/trials/pooled_trend.md
+# and docs/trials/pooled_trend_exploration.md.
+submit: trend_level10_15_sensitivity

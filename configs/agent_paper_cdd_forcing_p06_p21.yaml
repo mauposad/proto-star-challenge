@@ -1,0 +1,97 @@
+# Trial: replication step 9 (CDD recomputed from daily data after a warming shift), P06 (EIA
+# STEO weather model: regression on annual degree days) and P21 (forced trend + AR(1)
+# benchmark; P20 for context).
+# Cards: papers/2025_eia_steo_cdd/README.md, papers/2013_ho_forced_trend_ar1/README.md
+# Run:     uv run proto-star climate-trial configs/agent_paper_cdd_forcing_p06_p21.yaml --record
+# Why:     uv run python scripts/analyze_cdd_forcing_p06_p21.py
+# Package: uv run proto-star climate-package configs/agent_paper_cdd_forcing_p06_p21.yaml
+# Needs:   data/raw/protostar/daily.parquet (step 9) and, for the CO2 variants,
+#          `uv run python scripts/download_noaa_co2.py` (capped at 2018).
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+# The 11 new variants below were fixed before the first run. Every one is kept as the record.
+# All step-9 and P06 variants change only the CDD column, so each one is hybrid_ridge_all_cdd
+# with its CDD column swapped (current_best for temperature, precipitation and hottest day).
+name: paper_cdd_forcing_p06_p21
+description: >
+  Step 9: each city's last N valid years of daily Tmean, shifted by a temperature forecast
+  anomaly, CDD recomputed with the challenge definition (sum of max(0, Tmean - 65 F)), with
+  a first-order (linear) ablation that removes the convexity. P06: EIA's 30-year CDD trend
+  line, and CDD regressed on annual mean temperature evaluated at a temperature forecast.
+  P21: forced trend on log CO2 (NOAA Mauna Loa, extrapolated linearly from the last 10 years
+  before each cut-off) or on a regional-mean temperature, plus an AR(1) residual.
+
+forecasters:
+  # References
+  - current_best            # 10y mean for temperature/CDD, 30y mean for precip/hottest day
+  - ten_year_mean
+  - hybrid_ridge_all_cdd    # the current bar (ADR 0005): pooled ridge for CDD only
+  # Step 9: shifted daily climatology (daily) and its convexity-free ablation (linear)
+  - shift30_recent
+  - shift30_recent_linear
+  - shift10_trend
+  - shift10_trend_linear
+  - shift10_co2
+  # P06: EIA 30-year trend line on CDD (faithful), and CDD on annual temperature (brief)
+  - eia_trend30
+  - eia_cdd_on_temp_recent
+  - eia_cdd_on_temp_trend
+  # P21: forced trend + AR(1) on temperature and CDD
+  - p21_co2_ar1
+  - p21_regional_ar1
+  # Equal-weight CDD average of the pooled ridge and shift30_recent (fixed in advance)
+  - hybrid_ridge_shift30_avg
+
+ensembles:
+  eia_trend30:
+    annual_avg_temp: ten_year_mean
+    total_precip_in: thirty_year_mean
+    hottest_day_temp: thirty_year_mean
+    cdd: linear_trend
+
+variants:
+  hybrid_ridge_all_cdd:   # copied from configs/agent_paper_p09_p14_pooled.yaml
+    forecaster: pooled_hybrid_p09_p14
+    params: {model_metrics: [cdd], estimator: ridge, alpha: 1.0, train_years: null}
+  shift30_recent:
+    forecaster: cdd_daily_shift
+    params: {clim_years: 30, anomaly: recent, mode: daily}
+  shift30_recent_linear:
+    forecaster: cdd_daily_shift
+    params: {clim_years: 30, anomaly: recent, mode: linear}
+  shift10_trend:
+    forecaster: cdd_daily_shift
+    params: {clim_years: 10, anomaly: trend, trend_shrink: 0.5, mode: daily}
+  shift10_trend_linear:
+    forecaster: cdd_daily_shift
+    params: {clim_years: 10, anomaly: trend, trend_shrink: 0.5, mode: linear}
+  shift10_co2:
+    forecaster: cdd_daily_shift
+    params: {clim_years: 10, anomaly: co2, mode: daily, fit_years: 40, extrap_years: 10, min_points: 15, phi_max: 0.95}
+  eia_cdd_on_temp_recent:
+    forecaster: cdd_on_temp_p06
+    params: {fit_years: 30, temp_source: recent, min_points: 10}
+  eia_cdd_on_temp_trend:
+    forecaster: cdd_on_temp_p06
+    params: {fit_years: 30, temp_source: trend, trend_shrink: 0.5, min_points: 10}
+  p21_co2_ar1:
+    forecaster: forced_trend_ar1_p21
+    params: {forcing: co2, metrics: [annual_avg_temp, cdd], fit_years: 40, extrap_years: 10, min_points: 15, phi_max: 0.95}
+  p21_regional_ar1:
+    forecaster: forced_trend_ar1_p21
+    params: {forcing: regional, metrics: [annual_avg_temp, cdd], fit_years: 40, extrap_years: 30, min_points: 15, phi_max: 0.95}
+  hybrid_ridge_shift30_avg:
+    forecaster: cdd_daily_shift
+    params:
+      clim_years: 30
+      anomaly: recent
+      mode: daily
+      blend_ridge_weight: 0.5
+      ridge_params: {estimator: ridge, alpha: 1.0, train_years: null}
+
+reference: current_best
+# Decided from this trial's backtest only (see docs/trials/paper_cdd_forcing_p06_p21_why.md).
+# No new variant beat hybrid_ridge_all_cdd (3.60 / 0.94 / 5.54): the best,
+# hybrid_ridge_shift30_avg, has 3.37 / 0.76 / 5.36 and beats it in years 4-7 at only 2/3
+# origins. Step-9 variants also read daily.parquet, which the package does not ship, and the
+# CO2 variants need data/external/noaa_co2, which CI does not download.
+submit: hybrid_ridge_all_cdd

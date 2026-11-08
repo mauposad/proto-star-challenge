@@ -31,7 +31,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --locked
+        run: uv sync --locked --extra hf  # CPU torch, for neural forecasters
 
       # data/ is git-ignored, so rebuild it from the public CMU dataset (cut-off 2018-12-31).
       - name: Download raw data and build the master table

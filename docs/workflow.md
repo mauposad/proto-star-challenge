@@ -5,7 +5,7 @@ One trial = one config file. Everything about it is found from that file's name.
 | Step | Command | Where the result goes |
 |---|---|---|
 | 1. Define the trial | copy `configs/mp_baselines_round1.yaml` to `configs/<initials>_<name>.yaml` | the config *is* the record of what was compared |
-| 2. Add logic (if new) | edit `src/proto_star/` (baselines in `climate.py`, registry in `backtest.py`) and add a test | tests in `tests/` |
+| 2. Add logic (if new) | baselines in `climate.py`; a model-based method is one new file in `src/proto_star/forecasters/` using `@register_forecaster`, with hyperparameters under `variants:` in the config. Add a test | tests in `tests/` |
 | 3. Run it | `uv run proto-star climate-trial configs/<initials>_<name>.yaml --record` | `runs/trials/<stamp>_<name>/` (git-ignored: config copy, `results.csv`, `summary.md`, `meta.json`) and **`docs/trials/<name>.md`** (committed write-up) |
 | 4. Log it | append a row to [experiments.md](experiments.md), failures included | `docs/experiments.md` |
 | 5. Pick the winner | set `submit:` in the config, from validation results only | the config |
@@ -44,6 +44,7 @@ fails if they differ. A reader can repeat that with `python code/reproduce.py`.
 |---|---|
 | Baselines and the official score | `src/proto_star/climate.py` |
 | Fold runner, forecaster registry, `build_submission` | `src/proto_star/backtest.py` |
+| Model-based forecasters (auto-discovered, one module each) | `src/proto_star/forecasters/` |
 | Trial config, run record, write-up | `src/proto_star/trial.py` |
 | Submission folder and reproduction check | `src/proto_star/submission_package.py` |
 | CLI commands `climate-trial`, `climate-package` | `src/proto_star/cli.py` |

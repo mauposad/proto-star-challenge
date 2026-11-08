@@ -128,6 +128,59 @@ until screened, and temperatures in 2018 are not rounded (see the EDA findings).
 - **Known limitation:** current station metadata can change administratively;
   the stored local artifact and checksum below are the version used here.
 
+### Regional pooling-group attributes (static, papers P22/P24)
+
+- **Download:** `uv run python scripts/download_regional_p22_p24.py` (about 13 MB, a few minutes;
+  refuses to overwrite). Writes `data/external/regional_p22_p24/`.
+- **Sources and licenses (all public domain U.S. government works):**
+  - `ghcnd-stations.txt`: NOAA NCEI GHCN-Daily station inventory,
+    `https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt`, for station elevation.
+    Same file and checksum as the existing `noaa_ghcn_stations` artifact.
+  - `Gaz_places_national.zip`: U.S. Census Bureau 2010 Gazetteer of places (2010 Census `POP10`,
+    file dated 2012),
+    `https://www2.census.gov/geo/docs/maps-data/data/gazetteer/Gaz_places_national.zip`.
+  - `nlcd2016_points.csv`: USGS MRLC NLCD 2016 Land Cover (CONUS), layer
+    `NLCD_2016_Land_Cover_L48`, read one pixel at a time with WMS `GetFeatureInfo` from
+    `https://www.mrlc.gov/geoserver/mrlc_display/NLCD_2016_Land_Cover_L48/wms` at 5 points per
+    station (centre and +-0.005 degrees N/S/E/W). Used instead of the multi-GB raster.
+- **Schema of `city_groups.csv`** (one row per challenge city, 210 rows): `city_id` (GHCN ID, =
+  master `ID`), `name`, `state`, `lat`, `lon` (master), `elevation_m` (GHCN), `place_2010`,
+  `pop_2010`, `place_distance_km` (most populous 2010 Census place within 20 km of the station;
+  the nearest place if none), `nlcd_c/n/s/e/w` (NLCD class codes), `land_cover`
+  (majority of the 5 pixels: `developed_high` = 23/24, `developed_low` = 21/22, `undeveloped`).
+- **Use:** static city attributes for pooling groups in `regional_trend_p22` and
+  `pooled_groups_p24` (elevation, population and land-cover groups only). No weather observations.
+  Vintages are pre-2019 (2010 Census, NLCD 2016); GHCN elevation is static station metadata from the
+  current inventory. The 2010 and 2016 vintages postdate the 1980 and 1995 backtest cutoffs (mild
+  look-ahead in group assignment only).
+- **CI:** the publish workflow does not download these files, so a `submit:` forecaster that
+  needs them would not rebuild on CI. `submit` in the trial config is `hybrid_ridge_all_cdd`.
+
+
+Note: `nlcd2016_points.csv` comes from a live web service; a re-download may differ if MRLC
+changes the served layer. The checksum above is the version used.
+
+### NOAA GML Mauna Loa annual mean CO2 (forcing, capped at 2018)
+
+- **Source / URL:** NOAA Global Monitoring Laboratory, Mauna Loa annual mean CO2:
+  `https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv`.
+- **Download:** `uv run python scripts/download_noaa_co2.py`. Keeps years ≤ 2018 only, checks
+  them with `assert_weather_cutoff`, writes a `SOURCE.txt` receipt, and refuses to overwrite an
+  existing folder.
+- **Files:** `data/external/noaa_co2/co2_annmean_mlo_to_2018.csv` (60 rows, 1959–2018) and
+  `data/external/noaa_co2/SOURCE.txt`.
+- **Schema:** `year` (int), `co2_ppm` (float, annual mean dry-air mole fraction, ppm).
+- **License:** public-domain U.S. government work (NOAA GML). NOAA asks users to cite the data
+  (Lan, Tans and Thoning, NOAA GML).
+- **Vintage:** downloaded on 2026-11-07 from the current file, so pre-2019 values are from
+  NOAA's current calibration, not a 2018 vintage. CO2 is a forcing, not a weather observation,
+  and no value after 2018 is kept.
+- **Use:** forcing for the P21 forced-trend benchmark (`forced_trend_ar1_p21`, `shift10_co2`
+  in `configs/agent_paper_cdd_forcing_p06_p21.yaml`). Inside a backtest fold only values up to
+  that fold's cut-off are read. Later years are extrapolated linearly from the last 10 values.
+- **CI:** the publish workflow does not download this file, so a CO2-based `submit:` would not
+  rebuild on CI. No CO2 forecaster is submitted.
+
 ## Input artifact checksums
 
 | Local artifact | SHA-256 |
@@ -137,6 +190,11 @@ until screened, and temperatures in 2018 are not rounded (see the EDA findings).
 | `data/raw/protostar/coverage_and_stations.parquet` | `3aad824b2a807bf520963c0599bad27d6dd8a0e894005ccbb57c1462dbd87027` |
 | `data/raw/protostar/daily.parquet` | `e1f403ceb031827474fb0b6b5432c2c91038e2f3f87ac12a322e75d19e2288c7` |
 | `data/external/noaa_ghcn_stations/ghcnd-stations.txt` | `437ee87f0343bcad408a492cf7a02163fb69255364c541b4006d5d76055d0dc3` |
+| `data/external/regional_p22_p24/ghcnd-stations.txt` | `437ee87f0343bcad408a492cf7a02163fb69255364c541b4006d5d76055d0dc3` |
+| `data/external/regional_p22_p24/Gaz_places_national.zip` | `db63b4ef027f2118221c057b9e4911a4bbda09975bdc4aac7d0c0ba286e04c76` |
+| `data/external/regional_p22_p24/nlcd2016_points.csv` | `849f440a17a2e927df8b312ab62933839a742a794c0c1bee3ca1ddd55c349553` |
+| `data/external/regional_p22_p24/city_groups.csv` | `4ca0476f2ee85100c041fae40ca746040531c1a8d21432b000c057c07e48ab51` |
+| `data/external/noaa_co2/co2_annmean_mlo_to_2018.csv` | `0ef2a07a4f2a5961efd070912079140446eb5ddd1b1d5587fddeb5844056a245` |
 
 ## Onboarding real data
 

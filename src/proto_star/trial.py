@@ -63,6 +63,11 @@ class TrialConfig(BaseModel):
     blends: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
     reference: str = CURRENT_BEST  # what "beats the baseline" is counted against
     submit: str | None = None  # forecaster to package; pick it from validation results only
+    # Submission write-up: a Markdown file (path from the repo root) placed in the README's
+    # Method section, and documents copied into the package's code/evidence/.
+    writeup: str | None = None
+    evidence: list[str] = Field(default_factory=list)
+    negative_result: bool = False  # True only if the main finding is that reuse failed
 
     @model_validator(mode="after")
     def _check_names(self) -> TrialConfig:
@@ -88,7 +93,7 @@ class TrialConfig(BaseModel):
 
 def load_trial_config(path: Path) -> TrialConfig:
     """Read and validate a trial config."""
-    return TrialConfig.model_validate(yaml.safe_load(path.read_text()))
+    return TrialConfig.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
 def build_forecasters(cfg: TrialConfig) -> dict[str, Forecaster]:
@@ -244,10 +249,10 @@ def run_trial(
     results.to_csv(run_dir / "results.csv", index=False)
     write_json(run_dir / "meta.json", meta)
     summary = _summary_markdown(cfg, config_path, results, meta)
-    (run_dir / "summary.md").write_text(summary)
+    (run_dir / "summary.md").write_text(summary, encoding="utf-8")
     if record:
         notes_dir.mkdir(parents=True, exist_ok=True)
-        (notes_dir / f"{cfg.name}.md").write_text(summary)
+        (notes_dir / f"{cfg.name}.md").write_text(summary, encoding="utf-8")
     return run_dir
 
 

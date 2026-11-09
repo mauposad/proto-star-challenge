@@ -80,3 +80,11 @@ reference: thirty_year_mean
 # Picked by the rule above: h2 has the highest official mean (4.41 vs 4.14 for trend), and also
 # beats trend on years 4-7 (7.12 vs 6.92) and on the 7-cut-off mean (4.62 vs 4.49).
 submit: h2_mean_cdd
+
+# Submission write-up (README Method section) and evidence shipped in code/evidence/.
+writeup: docs/submission/method_hybrid.md
+evidence:
+  - docs/trials/hybrid.md
+  - docs/trials/pooled_trend.md
+  - docs/trials/pooled_trend_exploration.md
+negative_result: false

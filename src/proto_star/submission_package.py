@@ -44,6 +44,8 @@ RAW_INPUTS = ("annual_indices.parquet", "city_info.parquet")
 PIPELINE_SCRIPTS = ("download_protostar_data.py", "build_master_dataset.py")
 EVIDENCE_SCRIPTS = ("compare_baselines.py", "evaluate_metric_ensemble.py")
 DOWNLOAD = "`python code/scripts/download_protostar_data.py`"
+TRAINING_REPO = "CMU-OSPO/protostar-climate-train-to-2018"
+TRAINING_LINK = f"[`{TRAINING_REPO}`](https://huggingface.co/datasets/{TRAINING_REPO})"
 TEAM_FILE = PROJECT_ROOT / "docs" / "submission" / "team.yaml"
 SUBMISSION_DOCS = ("policy-idea.md", "ecosystem-feedback.md")
 PLACEHOLDER = re.compile(r"<[^<>\n]*(?:team|username|institution|Name)[^<>\n]*>")
@@ -64,6 +66,39 @@ from proto_star.submission_package import verify_package  # noqa: E402
 if __name__ == "__main__":
     verify_package(ROOT)
 '''
+BACKTEST_SCRIPT = '''"""Rerun the backtests behind the method choice, from ../data alone.
+
+    pip install -r code/requirements.txt
+    python code/backtest.py            # official folds 1980, 1995, 2011 (a few minutes)
+    python code/backtest.py --extra    # plus cut-offs 1985, 1990, 2000, 2005 (robustness only)
+"""
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "code" / "src"))
+
+from proto_star.backtest import compare_forecasters, summarize_backtest  # noqa: E402
+from proto_star.climate import DEFAULT_CUTOFFS  # noqa: E402
+from proto_star.data.master import load_master  # noqa: E402
+from proto_star.trial import build_forecasters, load_trial_config  # noqa: E402
+
+if __name__ == "__main__":
+    cfg = load_trial_config(ROOT / "code" / "trial.yaml")
+    cutoffs = sorted({*DEFAULT_CUTOFFS, 1985, 1990, 2000, 2005}) if "--extra" in sys.argv else None
+    results = compare_forecasters(
+        build_forecasters(cfg), load_master(ROOT / "data"), cutoffs=cutoffs or DEFAULT_CUTOFFS
+    )
+    official = results.loc[results["cutoff_year"].isin(DEFAULT_CUTOFFS)]
+    print(summarize_backtest(official, baseline=cfg.reference).to_string(index=False))
+    if cutoffs:
+        table = results.loc[results["window"] == "all"].pivot_table(
+            index="method", columns="cutoff_year", values="raw_score"
+        )
+        table["mean"] = table.mean(axis=1)
+        print("\\nRaw score per cut-off, all forecast years\\n" + table.round(2).to_string())
+'''
 
 
 CODE_README = """# Code
@@ -73,19 +108,22 @@ Everything here rebuilds `../submission.csv` from `../data`.
 | Path | Purpose |
 |---|---|
 | `reproduce.py` | Rebuilds the forecasts from `../data` and compares them with `submission.csv` |
+| `backtest.py` | Reruns the backtests behind the method choice (`--extra` adds four cut-offs) |
+| `evidence/` | Trial write-ups: every candidate tried, its scores, and the selection rule |
 | `check_submission.py` | Official format check (same as the challenge Space) |
 | `trial.yaml` | Trial config: candidate forecasters, reference, and the one submitted |
 | `src/proto_star/` | The pipeline: loading, backtest, forecasters, packaging |
 | `scripts/download_protostar_data.py` | Downloads the public CMU training tables |
 | `scripts/build_master_dataset.py` | Builds the cleaned annual master table |
-| `scripts/compare_baselines.py` | Prints the backtest table behind the method choice |
-| `scripts/evaluate_metric_ensemble.py` | Prints the per-metric ensemble backtest |
+| `scripts/compare_baselines.py` | Prints the team's earlier baseline comparison |
+| `scripts/evaluate_metric_ensemble.py` | Prints the earlier per-metric baseline ensemble backtest |
 | `requirements.txt` | Pinned versions the package was built with |
 | `AGENTS.md` | Rules the AI agents followed (2018-12-31 data cut-off) |
 
 ```bash
 pip install -r code/requirements.txt
 python code/reproduce.py
+python code/backtest.py
 python code/check_submission.py submission.csv
 ```
 """
@@ -95,7 +133,7 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _copy_code(code_dir: Path, config_path: Path) -> None:
+def _copy_code(code_dir: Path, config_path: Path, evidence: list[str] | None = None) -> None:
     ignore = shutil.ignore_patterns("__pycache__", "*.pyc")
     shutil.copytree(
         PROJECT_ROOT / "src" / "proto_star", code_dir / "src" / "proto_star", ignore=ignore
@@ -108,9 +146,16 @@ def _copy_code(code_dir: Path, config_path: Path) -> None:
     check = "check_submission.py"
     shutil.copyfile(PROJECT_ROOT / "scripts" / check, code_dir / check)
     shutil.copyfile(config_path, code_dir / "trial.yaml")
-    (code_dir / "reproduce.py").write_text(REPRODUCE_SCRIPT)
-    (code_dir / "README.md").write_text(CODE_README)
-    (code_dir / "requirements.txt").write_text("\n".join(_runtime_pins()) + "\n")
+    (code_dir / "reproduce.py").write_text(REPRODUCE_SCRIPT, encoding="utf-8")
+    (code_dir / "backtest.py").write_text(BACKTEST_SCRIPT, encoding="utf-8")
+    (code_dir / "README.md").write_text(CODE_README, encoding="utf-8")
+    pins = "\n".join(_runtime_pins()) + "\n"
+    (code_dir / "requirements.txt").write_text(pins, encoding="utf-8")
+    if evidence:
+        evidence_dir = code_dir / "evidence"
+        evidence_dir.mkdir()
+        for relative in evidence:
+            shutil.copyfile(PROJECT_ROOT / relative, evidence_dir / Path(relative).name)
 
 
 def _runtime_pins() -> list[str]:
@@ -226,9 +271,15 @@ def _readme(
     team_table, ai_section = _team_sections(team)
     dirty = " (with uncommitted changes)" if meta["dirty"] else ""
     docs = {
-        name: (PROJECT_ROOT / "docs" / "submission" / name).read_text().strip()
+        name: (PROJECT_ROOT / "docs" / "submission" / name).read_text(encoding="utf-8").strip()
         for name in SUBMISSION_DOCS
     }
+    writeup = (
+        (PROJECT_ROOT / cfg.writeup).read_text(encoding="utf-8").strip() + "\n\n"
+        if cfg.writeup
+        else ""
+    )
+    negative = "yes" if cfg.negative_result else "no"
     return f"""---
 pretty_name: "ProtoStar Climate Risk Intelligence - {team["team_name"]}"
 license: cc-by-4.0
@@ -247,6 +298,8 @@ configs:
 
 # {team["team_name"]}: ProtoStar Climate Challenge Submission
 
+**Negative result:** {negative}
+
 Forecasts of annual average temperature, total precipitation, hottest-day temperature and
 cooling degree days for 210 U.S. cities, 2019-2025, built only from observations through
 2018-12-31.
@@ -257,7 +310,7 @@ cooling degree days for 210 U.S. cities, 2019-2025, built only from observations
 
 ## Method
 
-Forecaster `{forecaster}`: {describe_forecaster(forecaster, cfg)}.
+{writeup}Forecaster `{forecaster}`: {describe_forecaster(forecaster, cfg)}.
 
 Chosen from the candidates in `{config_name}` using only backtests on the team's fixed
 folds: seven-year forecasts from cut-offs {list(DEFAULT_CUTOFFS)}, scored with the official
@@ -284,12 +337,31 @@ Agent rules for this project are in `code/AGENTS.md`: they enforce the
 
 {docs["ecosystem-feedback.md"]}
 
+## Data
+
+- **External data:** none. The forecasts use only the challenge training data, through
+  2018-12-31.
+- **Curated data:** see the data card in [`data/README.md`](data/README.md): each file, its
+  source, license, preparation and checksum.
+
+Training data: {TRAINING_LINK}, from:
+
+- Lai, Y., & Dzombak, D. A. (2019). Compiled historical daily temperature and precipitation
+  data for selected 210 U.S. cities. Carnegie Mellon University.
+  https://doi.org/10.1184/R1/7890488.v6
+- Lai, Y., & Dzombak, D. A. (2019). Historical changes of annual temperature and precipitation
+  indices at selected 210 U.S. cities. Carnegie Mellon University.
+  https://doi.org/10.1184/R1/7961012.v6
+- Lai, Y., & Dzombak, D. A. (2019). Use of historical data to assess regional climate change.
+  *Journal of Climate*, 32(14), 4299-4320. https://doi.org/10.1175/JCLI-D-18-0630.1
+
 ## Files
 
 | File | Content |
 |---|---|
 | `submission.csv` | 5,880 forecasts: 210 cities x 7 years x 4 metrics |
-| `code/` | Pipeline, trial config `trial.yaml`, `requirements.txt`, `reproduce.py` |
+| `code/` | Pipeline, trial config `trial.yaml`, `requirements.txt`, `reproduce.py`, `backtest.py` |
+| `code/evidence/` | Trial write-ups: every candidate tried, with its scores |
 | `data/` | Curated inputs; each file is described in `data/README.md` |
 
 ## How to reproduce
@@ -297,6 +369,7 @@ Agent rules for this project are in `code/AGENTS.md`: they enforce the
 ```bash
 pip install -r code/requirements.txt
 python code/reproduce.py        # rebuilds the forecasts from data/ and compares with submission.csv
+python code/backtest.py         # reruns the backtest table above (a few minutes)
 ```
 
 Built from commit `{meta["commit"]}`{dirty} on {meta["date"]}.
@@ -333,13 +406,14 @@ def build_package(
     out_dir = out_root / f"{now.strftime('%Y%m%d-%H%M%S')}_{cfg.name}"
     out_dir.mkdir(parents=True, exist_ok=False)
     submission.to_csv(out_dir / "submission.csv", index=False)
-    _copy_code(out_dir / "code", config_path)
+    _copy_code(out_dir / "code", config_path, cfg.evidence)
     files = _copy_data(out_dir / "data", master_dir, raw_dir)
-    manifest = json.loads((master_dir / MANIFEST_FILE).read_text())
-    (out_dir / "data" / "README.md").write_text(_data_card(files, manifest))
+    manifest = json.loads((master_dir / MANIFEST_FILE).read_text(encoding="utf-8"))
+    (out_dir / "data" / "README.md").write_text(_data_card(files, manifest), encoding="utf-8")
     meta = {**git_info(), "date": now.strftime("%Y-%m-%d")}
+    team = yaml.safe_load(team_path.read_text(encoding="utf-8"))
     (out_dir / "README.md").write_text(
-        _readme(cfg, name, data, config_path.name, meta, yaml.safe_load(team_path.read_text()))
+        _readme(cfg, name, data, config_path.name, meta, team), encoding="utf-8"
     )
     return out_dir
 
@@ -349,7 +423,8 @@ def open_placeholders(package_dir: Path) -> list[str]:
     found: list[str] = []
     for path in (package_dir / "README.md", package_dir / "data" / "README.md"):
         relative = path.relative_to(package_dir)
-        found += [f"{relative}: {match}" for match in PLACEHOLDER.findall(path.read_text())]
+        text = path.read_text(encoding="utf-8")
+        found += [f"{relative}: {match}" for match in PLACEHOLDER.findall(text)]
     return found
 
 

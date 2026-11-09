@@ -1,33 +1,11 @@
-# Feedback to the ProtoStar ecosystem
+### What got in the way, and what would fix it
 
-## What got in the way
-
-1. **Validity is metric-specific but not machine-labeled.** The CMU annual
-   table exposes `Miss Tmax`, `Miss Tmin`, and `Miss Prcp`; participants must
-   infer that average temperature and CDD need both temperature completeness
-   checks, while precipitation and hottest-day values use different checks.
-   Applying one generic valid-year filter would silently bias some targets.
-2. **Cross-repository station linkage needs a stated contract.** CMU's
-   `city_info.ID` can join directly to NOAA's GHCN inventory, and our
-   reproducible report matched all 210 IDs. That capability was discoverable
-   only by inspecting both schemas and fixed-width NOAA documentation.
-3. **Data provenance needs freeze-friendly references.** NOAA's station
-   inventory is a living file. A URL alone is insufficient to reproduce the
-   exact metadata integration after an update.
-
-4. **No-data years look like real measurements.** In years with no observations, several
-   columns hold 0 or `±inf` instead of a blank: `ToT Prcp`, `Wet Days`, `Max 5-day P`, the
-   four warm and cold percentage columns, and the max/min columns. `Max 5-day P` even has a
-   nonzero value in 12 such years. Our master table blanks 13,160 of these cells.
-
-## What would fix it
-
-1. Publish a `valid_<metric>` boolean for each annual index using the
-   challenge's scoring completeness rule, plus a short data contract that
-   identifies the applicable missing-day columns.
-2. Publish a compact station crosswalk with the intended join key, metadata
-   source, and any known station-thread/location caveats.
-3. Include a release manifest with source URLs, retrieval date, checksum,
-   cutoff date, units, and the exact evaluation-validity rule. That would make
-   the dataset directly usable by both people and automated research agents.
-4. Store blanks for every index in a year with no observations of that variable.
+| # | What got in the way | What would fix it |
+|---|---|---|
+| 1 | **Validity is metric-specific but not machine-labeled.** The annual table has `Miss Tmax`, `Miss Tmin` and `Miss Prcp`; you must infer that temperature and CDD need both temperature checks while precipitation and hottest day use different ones. One generic valid-year filter silently biases some targets | Publish a `valid_<metric>` column using the scoring rule, plus a short data contract naming the missing-day columns each metric uses. Our cleaned table does this (`data/annual_master.parquet`) |
+| 2 | **No-data years look like real measurements.** In years with no observations, `ToT Prcp`, `Wet Days`, `Max 5-day P`, the four warm/cold percentage columns and the max/min columns hold 0 or `±inf` instead of a blank; `Max 5-day P` is even nonzero in 12 such years. Our master table blanks 13,160 such cells | Store a blank for every index in a year with no observations of that variable |
+| 3 | **A gated dataset passes for public.** Our first dataset had Hugging Face's automatic access gate on. Its README opened without a login, but `submission.csv` returned HTTP 401, and the Space reads the files without a token. Nothing on the dataset page made this obvious | Have the Space check the dataset's `gated` flag and say "turn off access requests" in its error; say "public and ungated" in the submission instructions |
+| 4 | **"Latest submission counts" was easy to misread.** Our team first believed that submitting links to separate datasets kept several entries scored at once. Only the team's most recent submission counts, whatever dataset it points to | State it on the Submission tab next to the button: "this replaces your team's current entry" |
+| 5 | **The baseline rule changed mid-challenge.** On November 6 the organizers clarified that the 30-year baseline also needs 10 valid years in its window. Our scorer had reproduced the earlier published practice-run numbers (212.9 / 177.4 against 213 / 177 °F-days), which then no longer matched the corrected 212 / 175 | Publish the scoring and baseline code, and a practice-fold answer key from before 2019, so teams can check their scorer exactly |
+| 6 | **Station linkage has no stated contract.** `city_info.ID` joins directly to NOAA's GHCN-Daily station inventory (all 210 IDs matched, `scripts/build_station_metadata_report.py` in our GitHub repository), but this was discoverable only by reading both schemas and NOAA's fixed-width documentation | Publish a station crosswalk: join key, metadata source, and known station moves |
+| 7 | **Living files are hard to cite.** NOAA's station inventory changes in place, so a URL alone cannot reproduce an integration later | Ship a release manifest: source URLs, retrieval date, checksums, cut-off date, units and the validity rule. Our `data/annual_master.manifest.json` is an example |

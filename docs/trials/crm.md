@@ -7,9 +7,9 @@ Coupled Regional Model: the champion's levels and non-negative pooled trend, wit
 
 | Item | Value |
 |---|---|
-| Date | 2026-11-08 |
+| Date | 2026-11-09 |
 | Config | `configs/mp_crm.yaml` |
-| Code version | `61b8035` (uncommitted changes) |
+| Code version | `942ff60` |
 | Data | `data/processed/protostar/annual_master.parquet`, content hash `99128065d035cf531fe13c214e514b6bb73927ae90a80a9b903949d13abb04d1` |
 | Folds | cut-offs [1980, 1995, 2011], 7-year horizon (ADR 0004) |
 | Reference | `thirty_year_mean` |

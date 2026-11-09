@@ -5,13 +5,28 @@ One trial = one config file. Everything about it is found from that file's name.
 | Step | Command | Where the result goes |
 |---|---|---|
 | 1. Define the trial | copy `configs/mp_baselines_round1.yaml` to `configs/<initials>_<name>.yaml` | the config *is* the record of what was compared |
-| 2. Add logic (if new) | edit `src/proto_star/` (baselines in `climate.py`, registry in `backtest.py`) and add a test | tests in `tests/` |
+| 2. Add logic (if new) | a new model kind is one module in `src/proto_star/forecasters/` (see below); baselines go in `climate.py`. Add a test | tests in `tests/` |
 | 3. Run it | `uv run proto-star climate-trial configs/<initials>_<name>.yaml --record` | `runs/trials/<stamp>_<name>/` (git-ignored: config copy, `results.csv`, `summary.md`, `meta.json`) and **`docs/trials/<name>.md`** (committed write-up) |
 | 4. Log it | append a row to [experiments.md](experiments.md), failures included | `docs/experiments.md` |
 | 5. Pick the winner | set `submit:` in the config, from validation results only | the config |
 | 6. Package it | `uv run proto-star climate-package configs/<initials>_<name>.yaml` | `submissions/<stamp>_<name>/` (git-ignored) |
 | 7. Fill in the blanks | team names, AI-tool disclosure; the command prints each `TODO before upload` | the folder's `README.md` |
 | 8. Upload and submit | a person copies the folder into the Hugging Face dataset and pastes the link in the Space | [release checklist](submission/release-checklist.md) |
+
+## Adding a model kind
+
+Write `src/proto_star/forecasters/<kind>.py` with a settings class (a `ForecasterSpec` with a
+`describe()` method), a build function that returns `forecaster(train, cutoff_year,
+forecast_years)`, and one `register_kind("<kind>", Spec, build)` call. The package finds the
+module by itself, so no shared file is edited. Name it in a trial config:
+
+```yaml
+models:
+  my_model_w15: {kind: my_kind, params: {window: 15}}
+```
+
+`params` are checked against the settings class when the config loads. See
+`src/proto_star/forecasters/pooled_trend.py` for a complete example.
 
 ## What a trial note records (`docs/trials/<name>.md`)
 

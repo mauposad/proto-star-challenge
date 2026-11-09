@@ -31,9 +31,19 @@ from proto_star.backtest import (
 )
 from proto_star.climate import BASELINE_DESCRIPTIONS, DEFAULT_CUTOFFS, METRICS
 from proto_star.data.master import content_hash, load_master
+from proto_star.forecasters import get_kind
 from proto_star.paths import PROJECT_ROOT, TRIAL_NOTES_DIR, TRIALS_DIR
 from proto_star.tracking import git_info, write_json
-from proto_star.trend import PooledTrendSpec
+from proto_star.trend import PooledTrendSpec, describe_pooled_trend
+
+
+class ModelEntry(BaseModel):
+    """A plug-in model: a kind registered in ``proto_star.forecasters`` and its settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str
+    params: dict[str, Any] = Field(default_factory=dict)
 
 
 class TrialConfig(BaseModel):
@@ -46,6 +56,7 @@ class TrialConfig(BaseModel):
     forecasters: list[str] = Field(min_length=1)
     ensembles: dict[str, dict[str, str]] = Field(default_factory=dict)
     pooled_trends: dict[str, PooledTrendSpec] = Field(default_factory=dict)
+    models: dict[str, ModelEntry] = Field(default_factory=dict)
     reference: str = CURRENT_BEST  # what "beats the baseline" is counted against
     submit: str | None = None  # forecaster to package; pick it from validation results only
 
@@ -56,6 +67,22 @@ class TrialConfig(BaseModel):
             raise ValueError(f"reference {self.reference!r} must be one of the forecasters")
         if self.submit is not None and self.submit not in known:
             raise ValueError(f"submit {self.submit!r} must be one of the forecasters")
+        blocks: dict[str, set[str]] = {
+            "ensembles": set(self.ensembles),
+            "pooled_trends": set(self.pooled_trends),
+        }
+        for block, names in blocks.items():
+            clash = sorted(names & set(self.models))
+            if clash:
+                raise ValueError(f"names {clash} are defined in both `models` and `{block}`")
+        builtin = sorted(set(self.models) & {*BASELINE_DESCRIPTIONS, CURRENT_BEST})
+        if builtin:
+            raise ValueError(f"`models` names {builtin} shadow built-in forecasters")
+        for name, entry in self.models.items():  # fail at load time, not mid-backtest
+            try:
+                get_kind(entry.kind).make_spec(entry.params)
+            except ValueError as error:
+                raise ValueError(f"model {name!r}: {error}") from error
         return self
 
 
@@ -66,25 +93,20 @@ def load_trial_config(path: Path) -> TrialConfig:
 
 def build_forecasters(cfg: TrialConfig) -> dict[str, Forecaster]:
     """Turn the names in a config into callable forecasters."""
+    models = {name: (entry.kind, entry.params) for name, entry in cfg.models.items()}
     return {
-        name: resolve_forecaster(name, cfg.ensembles, cfg.pooled_trends) for name in cfg.forecasters
+        name: resolve_forecaster(name, cfg.ensembles, cfg.pooled_trends, models)
+        for name in cfg.forecasters
     }
 
 
 def describe_forecaster(name: str, cfg: TrialConfig) -> str:
     """One line saying what a forecaster does, for notes and READMEs."""
+    if name in cfg.models:
+        entry = cfg.models[name]
+        return get_kind(entry.kind).make_spec(entry.params).describe()
     if name in cfg.pooled_trends:
-        spec = cfg.pooled_trends[name]
-        cdd = (
-            "CDD trend = pooled temperature trend x each city's CDD per degree"
-            if spec.cdd_sensitivity
-            else "CDD trend = pooled CDD slope"
-        )
-        return (
-            f"Mean of last-{spec.level_years}-valid-year levels plus a non-negative pooled "
-            f"{spec.trend_window}-year trend for temperature and CDD; {cdd}; 30-year mean for "
-            "precipitation and hottest day"
-        )
+        return describe_pooled_trend(cfg.pooled_trends[name])
     if name in cfg.ensembles:
         return "Per metric: " + ", ".join(f"{m}={cfg.ensembles[name][m]}" for m in METRICS)
     if name == CURRENT_BEST:

@@ -52,8 +52,8 @@ Note on P05 and P08: use the architectures only. Train from scratch; no pretrain
 
 | ID | Citation | Link | Reason |
 |----|----------|------|--------|
-| R01 | Fernandez and Barnes 2025. Multi-Year-to-Decadal Temperature Prediction using a Machine Learning Model-Analog Framework. | arXiv 2502.17583 | Uses CMIP6 runs. Those runs extend past 2018. |
-| R02 | Luo et al. 2022. A Bayesian Deep Learning Approach to Near-Term Climate Prediction. J. Adv. Model. Earth Syst. 14(10). | arXiv 2202.11244 | Uses a CESM2 control run. Simulated data. Target is not a U.S. city metric. |
+| R01 | Fernandez and Barnes 2025. Multi-Year-to-Decadal Temperature Prediction using a Machine Learning Model-Analog Framework. | arXiv 2502.17583 | Uses CMIP6 runs. Those runs extend past 2018. Methods only, trained on observations: allowed by [ADR 0008](../decisions/0008-paper-methods-on-observations.md). |
+| R02 | Luo et al. 2022. A Bayesian Deep Learning Approach to Near-Term Climate Prediction. J. Adv. Model. Earth Syst. 14(10). | arXiv 2202.11244 | Uses a CESM2 control run. Simulated data. Target is not a U.S. city metric. Methods only, trained on observations: allowed by [ADR 0008](../decisions/0008-paper-methods-on-observations.md). |
 | R03 | Lai and Dzombak 2021. Use of Integrated Global Climate Model Simulations and Statistical Time Series Forecasting to Project Regional Temperature and Precipitation. J. Appl. Meteor. Climatol. 60(5), 695-710. | 10.1175/JAMC-D-20-0204.1 | Uses climate model simulations covering 2019 to 2025. |
 
 If we ask the organizers, use the Space's Community tab.

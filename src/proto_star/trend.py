@@ -41,6 +41,20 @@ class PooledTrendSpec(BaseModel):
     cdd_sensitivity: bool = True  # False: CDD uses its own pooled slope, the same for all cities
 
 
+def describe_pooled_trend(spec: PooledTrendSpec) -> str:
+    """One line saying what a pooled-trend forecaster does, for notes and READMEs."""
+    cdd = (
+        "CDD trend = pooled temperature trend x each city's CDD per degree"
+        if spec.cdd_sensitivity
+        else "CDD trend = pooled CDD slope"
+    )
+    return (
+        f"Mean of last-{spec.level_years}-valid-year levels plus a non-negative pooled "
+        f"{spec.trend_window}-year trend for temperature and CDD; {cdd}; 30-year mean for "
+        "precipitation and hottest day"
+    )
+
+
 def _window_anomalies(
     history: pd.DataFrame, metric: str, cutoff_year: int, spec: PooledTrendSpec
 ) -> pd.DataFrame:

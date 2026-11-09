@@ -10,6 +10,7 @@ forecaster defeats this protection, and nothing here can detect it.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
+from typing import Any
 
 import pandas as pd
 
@@ -89,13 +90,21 @@ def resolve_forecaster(
     name: str,
     ensembles: Mapping[str, Mapping[str, str]] | None = None,
     pooled_trends: Mapping[str, PooledTrendSpec] | None = None,
+    models: Mapping[str, tuple[str, Mapping[str, Any]]] | None = None,
 ) -> Forecaster:
     """Look up a forecaster by the name used in trial configs.
 
     ``current_best`` is the team's current ensemble, a built-in baseline name is that
-    baseline, anything in ``ensembles`` is a metric-to-baseline mapping from the config, and
-    anything in ``pooled_trends`` is a pooled-trend model from the config.
+    baseline, anything in ``ensembles`` is a metric-to-baseline mapping from the config,
+    anything in ``pooled_trends`` is a pooled-trend model from the config, and anything in
+    ``models`` is a ``(kind, params)`` pair for a kind registered in ``proto_star.forecasters``.
     """
+    if models and name in models:
+        from proto_star.forecasters import get_kind  # lazy: forecaster modules import this one
+
+        kind_name, params = models[name]
+        kind = get_kind(kind_name)
+        return kind.build(kind.make_spec(params))
     if pooled_trends and name in pooled_trends:
         return pooled_trend_forecaster(pooled_trends[name])
     if ensembles and name in ensembles:
@@ -112,7 +121,7 @@ def resolve_forecaster(
         return baseline_forecaster(name)
     raise ValueError(
         f"unknown forecaster {name!r}; use {CURRENT_BEST!r}, one of {list(BASELINE_METHODS)}, "
-        "or define it under `ensembles` or `pooled_trends` in the trial config"
+        "or define it under `ensembles`, `pooled_trends` or `models` in the trial config"
     )
 
 

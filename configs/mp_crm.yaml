@@ -1,0 +1,130 @@
+# Trial: the Coupled Regional Model (plan Section 5), with the ablation rows of plan 5.6.
+# Run:    uv run proto-star climate-trial configs/mp_crm.yaml --record
+# Check:  uv run python scripts/robustness_origins.py configs/mp_crm.yaml
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+# Every variant that was scored is listed, failures included; docs/trials/crm_notes.md says in
+# what order they were tried and which were chosen after seeing earlier rows.
+name: crm
+description: >
+  Coupled Regional Model: the champion's levels and non-negative pooled trend, with regional
+  slopes shrunk toward the pooled slope by empirical Bayes (fixed regions or spectral clusters
+  recomputed per fold), an optional lasso VAR(1) of regional anomalies for the first years, and
+  station-segment or regional empirical-Bayes levels for precipitation and hottest day.
+
+forecasters:
+  # Rows 1-3: references
+  - thirty_year_mean
+  - current_best
+  - trend_level10_15_sensitivity
+  # Row 4: Layer 2, fixed regions
+  - crm_fixed_k0            # k_scale 0: must equal the champion
+  - crm_fixed_k05
+  - crm_fixed
+  - crm_fixed_cdd_slope
+  - crm_fixed_cdd_rescaled
+  # Row 5: Layer 2, spectral clusters
+  - crm_spectral4
+  - crm_spectral5
+  - crm_spectral6           # best of rows 4-5 by years_4_7: carried into row 6
+  - crm_spectral4_cdd_rescaled
+  - crm_spectral5_cdd_rescaled
+  - crm_spectral6_cdd_rescaled
+  # Row 6: + lasso VAR(1) interactions
+  - crm_fixed_var05
+  - crm_s6_var
+  - crm_s6_var05
+  - crm_s6_var_a01
+  - crm_s6_var_cs
+  - crm_s6_var_cs05
+  - crm_s6_var_a01_cs
+  - crm_s6_var_a01_cs05
+  - crm_s6_var_hot          # VAR shift kept for hottest day only (chosen after the rows above)
+  - crm_s6_var_hot05
+  # Row 7: + precipitation / hottest-day level tests (plan 5.5)
+  - crm_spectral6_seg
+  - crm_spectral6_eb
+  - crm_s6_var_hot_seg
+  - crm_s6_var_hot_eb
+  # Row 8: + urban covariate (census growth, agent D's city_static table)
+  - crm_spectral6_urban
+  - crm_s6_var_hot_eb_urban
+  # Per-metric gate (plan 5.5 / 7.4) applied after the 7-cut-off check: the hottest-day VAR
+  # failed it, so this is row 8 without VAR. Built after seeing every row above.
+  - crm_s6_eb_urban
+
+pooled_trends:
+  trend_level10_15_sensitivity:
+    level_years: [10, 15]
+    trend_window: 40
+    cdd_sensitivity: true
+
+# Unlisted CRM params take their defaults: levels [10, 15], 40-year trend window, k_scale 1,
+# CDD trend = city CDD per degree x shrunk regional temperature trend, no VAR, 30-year mean
+# for precipitation and hottest day, seed 0.
+models:
+  crm_fixed_k0: {kind: crm, params: {regions: fixed, k_scale: 0.0}}
+  crm_fixed_k05: {kind: crm, params: {regions: fixed, k_scale: 0.5}}
+  crm_fixed: {kind: crm, params: {regions: fixed}}
+  crm_fixed_cdd_slope: {kind: crm, params: {regions: fixed, cdd_trend: regional_slope}}
+  crm_fixed_cdd_rescaled: {kind: crm, params: {regions: fixed, cdd_trend: rescaled_sensitivity}}
+  crm_spectral4: {kind: crm, params: {regions: spectral, n_clusters: 4}}
+  crm_spectral5: {kind: crm, params: {regions: spectral, n_clusters: 5}}
+  crm_spectral6: {kind: crm, params: {regions: spectral, n_clusters: 6}}
+  crm_spectral4_cdd_rescaled:
+    {kind: crm, params: {regions: spectral, n_clusters: 4, cdd_trend: rescaled_sensitivity}}
+  crm_spectral5_cdd_rescaled:
+    {kind: crm, params: {regions: spectral, n_clusters: 5, cdd_trend: rescaled_sensitivity}}
+  crm_spectral6_cdd_rescaled:
+    {kind: crm, params: {regions: spectral, n_clusters: 6, cdd_trend: rescaled_sensitivity}}
+  crm_fixed_var05: {kind: crm, params: {regions: fixed, var: true, var_damping: 0.5}}
+  crm_s6_var: {kind: crm, params: {regions: spectral, n_clusters: 6, var: true}}
+  crm_s6_var05:
+    {kind: crm, params: {regions: spectral, n_clusters: 6, var: true, var_damping: 0.5}}
+  crm_s6_var_a01:
+    {kind: crm, params: {regions: spectral, n_clusters: 6, var: true, var_alpha: 0.1}}
+  crm_s6_var_cs:
+    {kind: crm, params: {regions: spectral, n_clusters: 6, var: true, var_city_scale: true}}
+  crm_s6_var_cs05:
+    kind: crm
+    params: {regions: spectral, n_clusters: 6, var: true, var_city_scale: true, var_damping: 0.5}
+  crm_s6_var_a01_cs:
+    kind: crm
+    params: {regions: spectral, n_clusters: 6, var: true, var_alpha: 0.1, var_city_scale: true}
+  crm_s6_var_a01_cs05:
+    kind: crm
+    params:
+      {regions: spectral, n_clusters: 6, var: true, var_alpha: 0.1, var_city_scale: true,
+       var_damping: 0.5}
+  crm_s6_var_hot:
+    kind: crm
+    params:
+      {regions: spectral, n_clusters: 6, var: true, var_alpha: 0.1, var_city_scale: true,
+       var_metrics: [hottest_day_temp]}
+  crm_s6_var_hot05:
+    kind: crm
+    params:
+      {regions: spectral, n_clusters: 6, var: true, var_alpha: 0.1, var_city_scale: true,
+       var_damping: 0.5, var_metrics: [hottest_day_temp]}
+  crm_spectral6_seg: {kind: crm, params: {regions: spectral, n_clusters: 6, flat_level: segment}}
+  crm_spectral6_eb:
+    {kind: crm, params: {regions: spectral, n_clusters: 6, flat_level: regional_eb}}
+  crm_s6_var_hot_seg:
+    kind: crm
+    params:
+      {regions: spectral, n_clusters: 6, var: true, var_alpha: 0.1, var_city_scale: true,
+       var_metrics: [hottest_day_temp], flat_level: segment}
+  crm_s6_var_hot_eb:
+    kind: crm
+    params:
+      {regions: spectral, n_clusters: 6, var: true, var_alpha: 0.1, var_city_scale: true,
+       var_metrics: [hottest_day_temp], flat_level: regional_eb}
+  crm_spectral6_urban: {kind: crm, params: {regions: spectral, n_clusters: 6, urban: true}}
+  crm_s6_var_hot_eb_urban:
+    kind: crm
+    params:
+      {regions: spectral, n_clusters: 6, var: true, var_alpha: 0.1, var_city_scale: true,
+       var_metrics: [hottest_day_temp], flat_level: regional_eb, urban: true}
+  crm_s6_eb_urban:
+    {kind: crm, params: {regions: spectral, n_clusters: 6, flat_level: regional_eb, urban: true}}
+
+reference: thirty_year_mean

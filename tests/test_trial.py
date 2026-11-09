@@ -1,4 +1,7 @@
+import hashlib
 import math
+import subprocess
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -7,6 +10,7 @@ import yaml
 
 from proto_star.climate import DEFAULT_CUTOFFS, ClimateSubmissionError
 from proto_star.data.master import MANIFEST_FILE, MASTER_FILE
+from proto_star.forecasters import _crm_urban
 from proto_star.submission_package import build_package, open_placeholders, verify_package
 from proto_star.trial import load_trial_config, run_trial
 
@@ -45,6 +49,8 @@ def _city_master() -> pd.DataFrame:
                 {
                     "ID": city,
                     "Year": year,
+                    "Lat": 40.0 - 10 * offset,
+                    "Lon": -80.0 - 20 * offset,
                     "Avg Temp": 50.0 + 10 * offset + trend + wiggle,
                     "ToT Prcp": 30.0 + 5 * offset + 3 * wiggle,
                     "Max Tmax": 95.0 + 2 * wiggle,
@@ -165,6 +171,50 @@ def test_package_reproduces_and_detects_tampering(config_path: Path, tmp_path: P
     submission.to_csv(package / "submission.csv", index=False)
     with pytest.raises(ClimateSubmissionError, match="differs"):
         verify_package(package)
+
+
+def test_urban_crm_package_carries_only_population_and_reproduces(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = {
+        "name": "urban_crm_package",
+        "description": "Tiny urban CRM packaging test.",
+        "forecasters": ["thirty_year_mean", "urban_crm"],
+        "models": {
+            "urban_crm": {
+                "kind": "crm",
+                "params": {"regions": "fixed", "k_scale": 0.0, "urban": True},
+            }
+        },
+        "reference": "thirty_year_mean",
+        "submit": "urban_crm",
+    }
+    config_path = tmp_path / "urban.yaml"
+    config_path.write_text(yaml.safe_dump(config))
+    city_static = pd.DataFrame({"ID": ["A", "B"], "unused_nlcd": [5.0, 10.0]})
+    for year, scale in zip((1970, 1980, 1990, 2000, 2010, 2020), range(1, 7), strict=True):
+        city_static[f"pop_{year}"] = [100_000 * scale, 200_000 * (scale + 1)]
+    source = tmp_path / "source_city_static.parquet"
+    city_static.to_parquet(source, index=False)
+    monkeypatch.setattr(_crm_urban, "CITY_STATIC_PATH", source)
+
+    package = _package(config_path, tmp_path)
+    packaged = package / "data" / "city_static.parquet"
+    expected_columns = ["ID", *[f"pop_{year}" for year in _crm_urban.CENSUS_YEARS]]
+    assert pd.read_parquet(packaged).columns.tolist() == expected_columns
+    data_card = (package / "data" / "README.md").read_text()
+    assert "U.S. Census Bureau Population Estimates Program" in data_card
+    assert "2018 forecast uses 2000-2010" in data_card
+    assert hashlib.sha256(packaged.read_bytes()).hexdigest()[:16] in data_card
+
+    reproduced = subprocess.run(
+        [sys.executable, package / "code" / "reproduce.py"],
+        cwd=package,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "OK:" in reproduced.stdout
 
 
 def test_package_fills_in_team_details_from_team_file(config_path: Path, tmp_path: Path) -> None:

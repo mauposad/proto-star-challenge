@@ -139,4 +139,8 @@ def test_existing_configs_still_load() -> None:
     for path in sorted(Path("configs").glob("*.yaml")):
         raw = yaml.safe_load(path.read_text())
         if "forecasters" in raw:  # trial configs, not training configs
-            assert load_trial_config(path).models == {}
+            loaded = load_trial_config(path)
+            if "models" not in raw:  # configs from before the plug-in registry stay unchanged
+                assert loaded.models == {}
+            else:
+                assert set(loaded.models) == set(raw["models"])

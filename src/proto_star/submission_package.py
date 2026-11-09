@@ -40,6 +40,7 @@ from proto_star.trial import (
 )
 
 RAW_INPUTS = ("annual_indices.parquet", "city_info.parquet")
+CITY_STATIC_FILE = "city_static.parquet"
 # Scripts shipped in code/scripts: the data pipeline, plus the ones that produced the evidence.
 PIPELINE_SCRIPTS = ("download_protostar_data.py", "build_master_dataset.py")
 EVIDENCE_SCRIPTS = ("compare_baselines.py", "evaluate_metric_ensemble.py")
@@ -123,13 +124,33 @@ def _runtime_pins() -> list[str]:
     return sorted(f"{name}=={metadata.version(name)}" for name in names)
 
 
-def _copy_data(data_dir: Path, master_dir: Path, raw_dir: Path) -> list[Path]:
+def _urban_city_static_source(cfg: TrialConfig, forecaster: str) -> Path | None:
+    """Return the Census artifact needed by a selected urban CRM, if any."""
+    entry = cfg.models.get(forecaster)
+    if entry is None or entry.kind != "crm" or not entry.params.get("urban", False):
+        return None
+    from proto_star.forecasters._crm_urban import _default_city_static_path
+
+    return _default_city_static_path()
+
+
+def _copy_data(
+    data_dir: Path, master_dir: Path, raw_dir: Path, city_static_source: Path | None = None
+) -> list[Path]:
     data_dir.mkdir()
     sources = [master_dir / MASTER_FILE, master_dir / MANIFEST_FILE]
     sources += [raw_dir / name for name in RAW_INPUTS]
     for source in sources:
         shutil.copyfile(source, data_dir / source.name)
-    return [data_dir / source.name for source in sources]
+    copied = [data_dir / source.name for source in sources]
+    if city_static_source is not None:
+        from proto_star.forecasters._crm_urban import load_city_static
+
+        population = load_city_static(city_static_source)
+        destination = data_dir / CITY_STATIC_FILE
+        population.to_parquet(destination, index=False)
+        copied.append(destination)
+    return copied
 
 
 def _data_card(files: list[Path], manifest: dict[str, object]) -> str:
@@ -148,6 +169,12 @@ def _data_card(files: list[Path], manifest: dict[str, object]) -> str:
             "CMU city list: station ID, name, latitude, longitude",
             "unchanged copy",
         ),
+        CITY_STATIC_FILE: (
+            "Population-only city table: station ID and decennial county population, "
+            "1970-2020; no land-cover, geography, reanalysis or weather fields",
+            "U.S. Census county population joined to station coordinates by the Census "
+            "geocoder; public-domain U.S. government data",
+        ),
     }
     rows = pd.DataFrame(
         {
@@ -165,10 +192,19 @@ error if it finds one (`assert_weather_cutoff`).
 
 ## Files in this folder
 
-Source for all of them: `CMU-OSPO/protostar-climate-train-to-2018` on Hugging Face (original
-records: Lai & Dzombak 2019, DOI 10.1184/R1/7890488.v6). License: CC0-1.0.
-
 {markdown_table(rows)}
+
+## Sources and licenses
+
+- `annual_master.parquet`, `annual_indices.parquet`, `city_info.parquet` and the manifest:
+  `CMU-OSPO/protostar-climate-train-to-2018` on Hugging Face (original records: Lai &
+  Dzombak 2019, DOI 10.1184/R1/7890488.v6), CC0-1.0.
+- `city_static.parquet`, when present: U.S. Census Bureau Population Estimates Program
+  county population and Census geocoder, public-domain U.S. government data. The packaged
+  file is a derived population-only subset; its SHA-256 above pins the exact packaged bytes.
+  Population does not respond to weather. For every backtest and forecast the CRM uses the
+  latest census decade ending at or before that cut-off (the 2018 forecast uses 2000-2010),
+  so the included 2020 column is present for schema consistency but is not used.
 
 ## Not copied (download instead)
 
@@ -334,7 +370,8 @@ def build_package(
     out_dir.mkdir(parents=True, exist_ok=False)
     submission.to_csv(out_dir / "submission.csv", index=False)
     _copy_code(out_dir / "code", config_path)
-    files = _copy_data(out_dir / "data", master_dir, raw_dir)
+    city_static_source = _urban_city_static_source(cfg, name)
+    files = _copy_data(out_dir / "data", master_dir, raw_dir, city_static_source)
     manifest = json.loads((master_dir / MANIFEST_FILE).read_text())
     (out_dir / "data" / "README.md").write_text(_data_card(files, manifest))
     meta = {**git_info(), "date": now.strftime("%Y-%m-%d")}

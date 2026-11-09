@@ -114,6 +114,24 @@ def _copy_code(code_dir: Path, config_path: Path) -> None:
     (code_dir / "requirements.txt").write_text("\n".join(_runtime_pins()) + "\n")
 
 
+def _set_packaged_submit(trial_path: Path, name: str) -> None:
+    """Make the packaged config's ``submit`` the forecaster that was packaged.
+
+    ``reproduce.py`` and :func:`verify_package` rebuild ``submit`` from ``code/trial.yaml``, so a
+    ``--forecaster`` override must be written there. Comments in the config are kept.
+    """
+    text = trial_path.read_text()
+    line = f"submit: {name}  # set by climate-package --forecaster"
+    pattern = re.compile(r"^submit:.*$", flags=re.MULTILINE)
+    if pattern.search(text):
+        text = pattern.sub(line, text, count=1)
+    else:
+        text = f"{text.rstrip()}\n{line}\n"
+    trial_path.write_text(text)
+    if load_trial_config(trial_path).submit != name:
+        raise ValueError(f"could not set `submit: {name}` in {trial_path}")
+
+
 def _runtime_pins() -> list[str]:
     """Pin every runtime dependency of proto-star (extras excluded) to the installed version."""
     names = [
@@ -370,6 +388,8 @@ def build_package(
     out_dir.mkdir(parents=True, exist_ok=False)
     submission.to_csv(out_dir / "submission.csv", index=False)
     _copy_code(out_dir / "code", config_path)
+    if name != cfg.submit:
+        _set_packaged_submit(out_dir / "code" / "trial.yaml", name)
     city_static_source = _urban_city_static_source(cfg, name)
     files = _copy_data(out_dir / "data", master_dir, raw_dir, city_static_source)
     manifest = json.loads((master_dir / MANIFEST_FILE).read_text())

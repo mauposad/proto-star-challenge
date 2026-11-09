@@ -22,10 +22,18 @@ from proto_star.data.external.census import (
 from proto_star.data.protostar import load_city_info
 
 
-def _get(url: str, params: dict[str, str]) -> str:
-    response = requests.get(url, params=params, timeout=60)
-    response.raise_for_status()
-    return response.text
+def _get(url: str, params: dict[str, str], attempts: int = 4) -> str:
+    """GET with a short backoff: the geocoder sometimes answers 5xx under load (CI runs)."""
+    for attempt in range(1, attempts + 1):
+        try:
+            response = requests.get(url, params=params, timeout=60)
+            response.raise_for_status()
+            return response.text
+        except requests.RequestException:
+            if attempt == attempts:
+                raise
+            time.sleep(2**attempt)
+    raise AssertionError("unreachable")
 
 
 def download_files(destination: Path) -> None:

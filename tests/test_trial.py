@@ -100,7 +100,12 @@ def test_run_trial_records_what_was_used(config_path: Path, tmp_path: Path) -> N
         assert expected in note
 
 
-def _package(config_path: Path, tmp_path: Path, team_path: Path | None = None) -> Path:
+def _package(
+    config_path: Path,
+    tmp_path: Path,
+    team_path: Path | None = None,
+    forecaster: str | None = None,
+) -> Path:
     master_dir, raw_dir = tmp_path / "processed", tmp_path / "raw"
     master_dir.mkdir()
     raw_dir.mkdir()
@@ -115,6 +120,7 @@ def _package(config_path: Path, tmp_path: Path, team_path: Path | None = None) -
         master_dir=master_dir,
         raw_dir=raw_dir,
         out_root=tmp_path / "submissions",
+        forecaster=forecaster,
         **({"team_path": team_path} if team_path else {}),
     )
 
@@ -171,6 +177,16 @@ def test_package_reproduces_and_detects_tampering(config_path: Path, tmp_path: P
     submission.to_csv(package / "submission.csv", index=False)
     with pytest.raises(ClimateSubmissionError, match="differs"):
         verify_package(package)
+
+
+@pytest.mark.parametrize("submit", ["mixed", None])
+def test_forecaster_override_is_the_one_reproduced(submit: str | None, tmp_path: Path) -> None:
+    config_path = tmp_path / "override.yaml"
+    config = {k: v for k, v in CONFIG.items() if k != "submit"}
+    config_path.write_text(yaml.safe_dump({**config, **({"submit": submit} if submit else {})}))
+    package = _package(config_path, tmp_path, forecaster="ten_year_mean")
+    assert load_trial_config(package / "code" / "trial.yaml").submit == "ten_year_mean"
+    verify_package(package)  # rebuilds ten_year_mean and matches submission.csv
 
 
 def test_urban_crm_package_carries_only_population_and_reproduces(

@@ -128,3 +128,6 @@ models:
     {kind: crm, params: {regions: spectral, n_clusters: 6, flat_level: regional_eb, urban: true}}
 
 reference: thirty_year_mean
+# Chosen from validation results only: the per-metric gate row (docs/trials/crm_notes.md).
+# It was assembled after all rows were scored, so its margin over the champion is flattered.
+submit: crm_s6_eb_urban

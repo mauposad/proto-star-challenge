@@ -23,10 +23,11 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
-from proto_star.climate import baseline_forecast, validate_climate_history
+from proto_star.climate import BASELINE_WINDOW_YEARS, baseline_forecast, validate_climate_history
 
 TEMPERATURE = "annual_avg_temp"
 CDD = "cdd"
+HOTTEST = "hottest_day_temp"
 FLAT_METHOD = "thirty_year_mean"
 
 
@@ -39,6 +40,9 @@ class PooledTrendSpec(BaseModel):
     trend_window: int = Field(ge=10)  # calendar years used to fit the pooled slope
     min_city_years: int = Field(default=10, ge=3)  # valid years a city needs to enter a fit
     cdd_sensitivity: bool = True  # False: CDD uses its own pooled slope, the same for all cities
+    # Hottest day: 30-year mean plus this fraction of (city's hottest-day change per degree x
+    # pooled warming). 0 keeps the plain 30-year mean.
+    hottest_sensitivity: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
 def _window_anomalies(
@@ -73,25 +77,35 @@ def pooled_slope(
     return max(0.0, float((anomalies["x"] * anomalies["y"]).sum()) / spread)
 
 
-def cdd_per_degree(history: pd.DataFrame, cutoff_year: int, spec: PooledTrendSpec) -> pd.Series:
-    """Each city's CDD gained per degree of annual temperature, from its own trend window."""
+def per_degree(
+    history: pd.DataFrame, metric: str, cutoff_year: int, spec: PooledTrendSpec
+) -> pd.Series:
+    """Each city's change in ``metric`` per degree of annual temperature, from its trend window.
+
+    Floored at zero: a city that seems to lose CDD or hottest-day heat as it warms is noise.
+    """
     first_year = cutoff_year - spec.trend_window + 1
     window = history.loc[
-        history["metric"].isin([TEMPERATURE, CDD])
+        history["metric"].isin([TEMPERATURE, metric])
         & history["year"].between(first_year, cutoff_year)
     ]
     paired = window.pivot_table(
         index=["city_id", "year"], columns="metric", values="actual_value"
-    ).reindex(columns=[TEMPERATURE, CDD])
+    ).reindex(columns=[TEMPERATURE, metric])
     paired = paired.dropna()
     by_city = paired.groupby(level="city_id")
-    paired = paired.loc[by_city[CDD].transform("size") >= spec.min_city_years]
+    paired = paired.loc[by_city[metric].transform("size") >= spec.min_city_years]
     by_city = paired.groupby(level="city_id")
     temperature = paired[TEMPERATURE] - by_city[TEMPERATURE].transform("mean")
-    cdd = paired[CDD] - by_city[CDD].transform("mean")
+    response = paired[metric] - by_city[metric].transform("mean")
     spread = (temperature**2).groupby(level="city_id").sum()
-    covariance = (temperature * cdd).groupby(level="city_id").sum()
+    covariance = (temperature * response).groupby(level="city_id").sum()
     return (covariance / spread.where(spread > 0)).dropna().clip(lower=0.0)
+
+
+def cdd_per_degree(history: pd.DataFrame, cutoff_year: int, spec: PooledTrendSpec) -> pd.Series:
+    """Each city's CDD gained per degree of annual temperature, from its own trend window."""
+    return per_degree(history, CDD, cutoff_year, spec)
 
 
 def _levels(history: pd.DataFrame, metric: str, cutoff_year: int, years: int) -> pd.DataFrame:
@@ -157,5 +171,32 @@ def pooled_trend_forecast(
         train, cutoff_year=cutoff_year, forecast_years=years, method=FLAT_METHOD
     )
     trends = [_trend_rows(train, metric, cutoff_year, years, spec) for metric in (TEMPERATURE, CDD)]
-    kept = flat.loc[~flat["metric"].isin([TEMPERATURE, CDD])]
+    kept = flat.loc[~flat["metric"].isin([TEMPERATURE, CDD])].copy()
+    if spec.hottest_sensitivity > 0:
+        kept = _warm_hottest_day(train, kept, cutoff_year, spec)
     return pd.concat([kept, *trends], ignore_index=True)
+
+
+def _warm_hottest_day(
+    history: pd.DataFrame, flat: pd.DataFrame, cutoff_year: int, spec: PooledTrendSpec
+) -> pd.DataFrame:
+    """Add a damped, city-scaled warming trend to the 30-year hottest-day mean.
+
+    The trend runs from the mean year of the values in the 30-year window, where the flat
+    forecast sits. Cities without an estimated sensitivity keep the plain mean.
+    """
+    rows = history.loc[
+        (history["metric"] == HOTTEST)
+        & history["year"].between(cutoff_year - BASELINE_WINDOW_YEARS + 1, cutoff_year)
+    ]
+    center = rows.groupby("city_id")["year"].mean()
+    slope = (
+        spec.hottest_sensitivity
+        * per_degree(history, HOTTEST, cutoff_year, spec)
+        * pooled_slope(history, TEMPERATURE, cutoff_year, spec)
+    )
+    hottest = flat["metric"] == HOTTEST
+    city = flat.loc[hottest, "city_id"]
+    gain = city.map(slope).fillna(0.0) * (flat.loc[hottest, "year"] - city.map(center)).fillna(0.0)
+    flat.loc[hottest, "predicted_value"] = flat.loc[hottest, "predicted_value"] + gain
+    return flat

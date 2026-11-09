@@ -1,0 +1,80 @@
+# Trial: combine the pooled trend (ADR 0007) with Mauricio's pooled ridge (ADR 0005, P09/P14).
+# Run:     uv run proto-star climate-trial configs/lc_hybrid.yaml --record
+# Check:   uv run python scripts/robustness_origins.py configs/lc_hybrid.yaml
+# Package: uv run proto-star climate-package configs/lc_hybrid.yaml
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+#
+# Selection rule, written before any of these were run: a candidate replaces `trend` only if it
+# has the highest mean raw score (all years) on the ADR 0004 folds AND also beats `trend` on the
+# years 4-7 mean and on the 7-cut-off robustness mean. Within 0.05 points, the simpler one wins.
+# Leaderboard scores are never used.
+name: hybrid
+description: >
+  Per-metric combinations of the team's two best models: the pooled trend (better on temperature)
+  and the pooled ridge (better on CDD). Also tests a new idea: a damped hottest-day trend scaled
+  by each city's hottest-day change per degree of warming.
+
+forecasters:
+  - thirty_year_mean   # reference: the official baseline
+  - current_best       # earlier team submission
+  - trend              # A: current submission (ADR 0007)
+  - ridge_cdd          # R: Mauricio's ADR 0005 model, unchanged
+  - h1_trend_temp_ridge_cdd
+  - h2_mean_cdd
+  - h3_mean_temp_cdd
+  - h4_mean_cdd_hot50
+  - h5_mean_cdd_hot100
+
+variants:
+  ridge_cdd:           # exactly hybrid_ridge_all_cdd from configs/agent_paper_p09_p14_pooled.yaml
+    forecaster: pooled_hybrid_p09_p14
+    params: {model_metrics: [cdd], estimator: ridge, alpha: 1.0, train_years: null}
+  ridge_temp_cdd:      # same model, also fitted to temperature (member only)
+    forecaster: pooled_hybrid_p09_p14
+    params: {model_metrics: [annual_avg_temp, cdd], estimator: ridge, alpha: 1.0, train_years: null}
+
+pooled_trends:
+  trend:               # identical to trend_level10_15_sensitivity in configs/lc_pooled_trend.yaml
+    level_years: [10, 15]
+    trend_window: 40
+    cdd_sensitivity: true
+  trend_hot50:
+    level_years: [10, 15]
+    trend_window: 40
+    cdd_sensitivity: true
+    hottest_sensitivity: 0.5
+  trend_hot100:
+    level_years: [10, 15]
+    trend_window: 40
+    cdd_sensitivity: true
+    hottest_sensitivity: 1.0
+
+blends:
+  h1_trend_temp_ridge_cdd:
+    annual_avg_temp: [trend]
+    cdd: [ridge_cdd]
+    total_precip_in: [trend]
+    hottest_day_temp: [trend]
+  h2_mean_cdd:
+    annual_avg_temp: [trend]
+    cdd: [trend, ridge_cdd]
+    total_precip_in: [trend]
+    hottest_day_temp: [trend]
+  h3_mean_temp_cdd:
+    annual_avg_temp: [trend, ridge_temp_cdd]
+    cdd: [trend, ridge_cdd]
+    total_precip_in: [trend]
+    hottest_day_temp: [trend]
+  h4_mean_cdd_hot50:
+    annual_avg_temp: [trend]
+    cdd: [trend, ridge_cdd]
+    total_precip_in: [trend]
+    hottest_day_temp: [trend_hot50]
+  h5_mean_cdd_hot100:
+    annual_avg_temp: [trend]
+    cdd: [trend, ridge_cdd]
+    total_precip_in: [trend]
+    hottest_day_temp: [trend_hot100]
+
+reference: thirty_year_mean
+submit: trend   # until the rule above picks otherwise

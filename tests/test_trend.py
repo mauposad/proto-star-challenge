@@ -151,4 +151,68 @@ def test_spec_rejects_unknown_settings() -> None:
 
 
 def test_resolve_forecaster_finds_a_pooled_trend() -> None:
-    assert callable(resolve_forecaster("mine", None, {"mine": SPEC}))
+    assert callable(resolve_forecaster("mine", pooled_trends={"mine": SPEC}))
+
+
+def _hot_history(per_degree_hot: float) -> pd.DataFrame:
+    """Hottest day follows each city's annual temperature at a fixed rate."""
+    history = _history(0.1)
+    temp = history[history.metric == "annual_avg_temp"].set_index(["city_id", "year"])
+    hot = history.metric == "hottest_day_temp"
+    keys = list(zip(history.loc[hot, "city_id"], history.loc[hot, "year"], strict=True))
+    base = temp.loc[keys, "actual_value"].to_numpy()
+    history.loc[hot, "actual_value"] = 95.0 + per_degree_hot * (base - base.mean())
+    return history
+
+
+def test_hottest_sensitivity_off_keeps_the_thirty_year_mean() -> None:
+    history = _hot_history(2.0)
+    plain = _forecast(history)
+    mean = history[(history.city_id == "A") & (history.metric == "hottest_day_temp")]
+    assert plain.loc[("A", "hottest_day_temp", 2025), "predicted_value"] == pytest.approx(
+        mean.actual_value.mean()
+    )
+
+
+def test_hottest_sensitivity_adds_a_damped_city_scaled_trend() -> None:
+    history = _hot_history(2.0)
+    half = PooledTrendSpec(level_years=[10], trend_window=30, hottest_sensitivity=0.5)
+    full = PooledTrendSpec(level_years=[10], trend_window=30, hottest_sensitivity=1.0)
+    plain = _forecast(history).loc[("A", "hottest_day_temp", 2025), "predicted_value"]
+    gain_half = _forecast(history, half).loc[("A", "hottest_day_temp", 2025), "predicted_value"]
+    gain_full = _forecast(history, full).loc[("A", "hottest_day_temp", 2025), "predicted_value"]
+    assert gain_half > plain
+    assert gain_full - plain == pytest.approx(2 * (gain_half - plain))
+    years = history[(history.city_id == "A") & (history.metric == "hottest_day_temp")].year
+    warming = pooled_slope(history, "annual_avg_temp", 2018, SPEC)
+    assert gain_full - plain == pytest.approx(2.0 * warming * (2025 - years.mean()), rel=0.02)
+
+
+def test_blend_averages_members_per_metric() -> None:
+    from proto_star.backtest import blend_forecaster
+
+    def constant(value: float):  # type: ignore[no-untyped-def] # tiny test helper
+        def forecast(train: pd.DataFrame, cutoff: int, years: list[int]) -> pd.DataFrame:
+            return pd.DataFrame(
+                [
+                    {"city_id": "A", "year": y, "metric": m, "predicted_value": value}
+                    for y in years
+                    for m in METRICS
+                ]
+            )
+
+        return forecast
+
+    members = {"low": constant(1.0), "high": constant(3.0)}
+    plan = {m: ["low"] for m in METRICS} | {"cdd": ["low", "high"]}
+    out = blend_forecaster(members, plan)(pd.DataFrame(), 2018, [2019]).set_index("metric")
+    assert out.loc["cdd", "predicted_value"] == pytest.approx(2.0)
+    assert out.loc["annual_avg_temp", "predicted_value"] == pytest.approx(1.0)
+    with pytest.raises(ValueError, match="every metric"):
+        blend_forecaster(members, {"cdd": ["low"]})
+
+
+def test_blend_rejects_nested_blends() -> None:
+    plan = {m: ["thirty_year_mean"] for m in METRICS}
+    with pytest.raises(ValueError, match="other blends"):
+        resolve_forecaster("outer", blends={"outer": {**plan, "cdd": ["inner"]}, "inner": plan})

@@ -9,7 +9,8 @@ forecaster defeats this protection, and nothing here can detect it.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import Any
 
 import pandas as pd
 
@@ -85,19 +86,73 @@ def pooled_trend_forecaster(spec: PooledTrendSpec) -> Forecaster:
     return forecast
 
 
+def blend_forecaster(
+    members: Mapping[str, Forecaster], by_metric: Mapping[str, Sequence[str]]
+) -> Forecaster:
+    """Per metric, the equal-weight mean of the named members' forecasts (P16/P17).
+
+    Each member runs once per call, however many metrics use it.
+    """
+    missing = sorted(set(METRICS) - set(by_metric))
+    if missing:
+        raise ValueError(f"a blend must name members for every metric; missing {missing}")
+
+    def forecast(train: pd.DataFrame, cutoff_year: int, forecast_years: list[int]) -> pd.DataFrame:
+        needed = sorted({member for names in by_metric.values() for member in names})
+        outputs = {member: members[member](train, cutoff_year, forecast_years) for member in needed}
+        parts = [
+            outputs[member].loc[outputs[member]["metric"] == metric, [*_KEY, "predicted_value"]]
+            for metric, names in by_metric.items()
+            for member in names
+        ]
+        combined = pd.concat(parts, ignore_index=True)
+        means = combined.groupby(_KEY, sort=True)["predicted_value"].mean()
+        return means.reset_index()
+
+    return forecast
+
+
 def resolve_forecaster(
     name: str,
     ensembles: Mapping[str, Mapping[str, str]] | None = None,
+    variants: Mapping[str, Mapping[str, Any]] | None = None,
     pooled_trends: Mapping[str, PooledTrendSpec] | None = None,
+    blends: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
 ) -> Forecaster:
     """Look up a forecaster by the name used in trial configs.
 
     ``current_best`` is the team's current ensemble, a built-in baseline name is that
-    baseline, anything in ``ensembles`` is a metric-to-baseline mapping from the config, and
-    anything in ``pooled_trends`` is a pooled-trend model from the config.
+    baseline, and anything in ``ensembles`` is a metric-to-baseline mapping from the config.
+    A name in ``variants`` is a registered forecaster (``proto_star.forecasters``) with the
+    hyperparameters given in the config, as ``{"forecaster": <registered>, "params": {...}}``;
+    this matches the format on ``agent/integrate-papers``. A name in ``pooled_trends`` is a
+    pooled-trend model, and a name in ``blends`` averages other named forecasters per metric.
     """
+    if blends and name in blends:
+        names = {member for members in blends[name].values() for member in members}
+        nested = sorted(names & set(blends))
+        if nested:
+            raise ValueError(f"blend {name!r} cannot use other blends {nested}")
+        resolved = {
+            member: resolve_forecaster(
+                member, ensembles, variants=variants, pooled_trends=pooled_trends
+            )
+            for member in names
+        }
+        return blend_forecaster(resolved, blends[name])
     if pooled_trends and name in pooled_trends:
         return pooled_trend_forecaster(pooled_trends[name])
+    if variants and name in variants:
+        from proto_star.forecasters import load_all
+
+        registry = load_all()
+        target = variants[name]["forecaster"]
+        if target not in registry:
+            raise ValueError(
+                f"variant {name!r} uses unregistered forecaster {target!r}; "
+                f"registered: {sorted(registry)}"
+            )
+        return registry[target].build(variants[name].get("params"))
     if ensembles and name in ensembles:
         mapping = dict(ensembles[name])
         if set(mapping) != set(METRICS):
@@ -112,7 +167,7 @@ def resolve_forecaster(
         return baseline_forecaster(name)
     raise ValueError(
         f"unknown forecaster {name!r}; use {CURRENT_BEST!r}, one of {list(BASELINE_METHODS)}, "
-        "or define it under `ensembles` or `pooled_trends` in the trial config"
+        "or define it under `ensembles`, `variants`, `pooled_trends` or `blends` in the config"
     )
 
 

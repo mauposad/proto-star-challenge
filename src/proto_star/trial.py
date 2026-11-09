@@ -36,6 +36,18 @@ from proto_star.tracking import git_info, write_json
 from proto_star.trend import PooledTrendSpec
 
 
+class Variant(BaseModel):
+    """A registered forecaster run with hyperparameters from the config.
+
+    Same shape as on ``agent/integrate-papers``, so configs work on both branches.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    forecaster: str  # name registered in proto_star.forecasters
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
 class TrialConfig(BaseModel):
     """What a trial compares.  Forecasting logic lives in code, not here."""
 
@@ -45,12 +57,27 @@ class TrialConfig(BaseModel):
     description: str
     forecasters: list[str] = Field(min_length=1)
     ensembles: dict[str, dict[str, str]] = Field(default_factory=dict)
+    variants: dict[str, Variant] = Field(default_factory=dict)
     pooled_trends: dict[str, PooledTrendSpec] = Field(default_factory=dict)
+    # Per metric, the names whose forecasts are averaged (equal weights).
+    blends: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
     reference: str = CURRENT_BEST  # what "beats the baseline" is counted against
     submit: str | None = None  # forecaster to package; pick it from validation results only
 
     @model_validator(mode="after")
     def _check_names(self) -> TrialConfig:
+        sections = [
+            set(self.ensembles),
+            set(self.variants),
+            set(self.pooled_trends),
+            set(self.blends),
+        ]
+        seen: set[str] = set()
+        for names in sections:
+            clash = sorted(seen & names)
+            if clash:
+                raise ValueError(f"names {clash} are defined in more than one section")
+            seen |= names
         known = set(self.forecasters)
         if self.reference not in known:
             raise ValueError(f"reference {self.reference!r} must be one of the forecasters")
@@ -66,13 +93,32 @@ def load_trial_config(path: Path) -> TrialConfig:
 
 def build_forecasters(cfg: TrialConfig) -> dict[str, Forecaster]:
     """Turn the names in a config into callable forecasters."""
+    variants = {name: variant.model_dump() for name, variant in cfg.variants.items()}
     return {
-        name: resolve_forecaster(name, cfg.ensembles, cfg.pooled_trends) for name in cfg.forecasters
+        name: resolve_forecaster(
+            name,
+            cfg.ensembles,
+            variants=variants,
+            pooled_trends=cfg.pooled_trends,
+            blends=cfg.blends,
+        )
+        for name in cfg.forecasters
     }
 
 
 def describe_forecaster(name: str, cfg: TrialConfig) -> str:
     """One line saying what a forecaster does, for notes and READMEs."""
+    if name in cfg.blends:
+        parts = [f"{m}=mean({', '.join(cfg.blends[name][m])})" for m in METRICS]
+        return "Per metric, equal-weight blend: " + "; ".join(parts)
+    if name in cfg.variants:
+        from proto_star.forecasters import load_all
+
+        variant = cfg.variants[name]
+        entry = load_all().get(variant.forecaster)
+        what = entry.description if entry else "registered forecaster"
+        params = ", ".join(f"{k}={v}" for k, v in sorted(variant.params.items()))
+        return f"{what} (`{variant.forecaster}`; {params})"
     if name in cfg.pooled_trends:
         spec = cfg.pooled_trends[name]
         cdd = (
@@ -80,10 +126,16 @@ def describe_forecaster(name: str, cfg: TrialConfig) -> str:
             if spec.cdd_sensitivity
             else "CDD trend = pooled CDD slope"
         )
+        hottest = (
+            f"hottest day = 30-year mean + {spec.hottest_sensitivity:g} x city sensitivity x "
+            "pooled warming"
+            if spec.hottest_sensitivity > 0
+            else "30-year mean for hottest day"
+        )
         return (
             f"Mean of last-{spec.level_years}-valid-year levels plus a non-negative pooled "
-            f"{spec.trend_window}-year trend for temperature and CDD; {cdd}; 30-year mean for "
-            "precipitation and hottest day"
+            f"{spec.trend_window}-year trend for temperature and CDD; {cdd}; {hottest}; "
+            "30-year mean for precipitation"
         )
     if name in cfg.ensembles:
         return "Per metric: " + ", ".join(f"{m}={cfg.ensembles[name][m]}" for m in METRICS)

@@ -40,3 +40,7 @@ submissions/*
 
 # --- AI agents (personal overrides) ---
 .claude/settings.local.json
+
+# --- Raw literature downloads (publisher copies; the notes and INDEX are kept) ---
+literature/sources/
+literature/search/

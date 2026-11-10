@@ -1,0 +1,124 @@
+# Final round, agent T: average temperature components (branch agent/final-temp).
+# Run:    uv run proto-star climate-trial configs/mp_final_temp.yaml --record
+# Check:  uv run python scripts/robustness_origins.py configs/mp_final_temp.yaml \
+#           --origins rolling27 --default t0_lead_split3 --out runs/robustness/final_temp
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+#
+# PRE-REGISTERED CANDIDATES (fixed before any run; none may be added after results are seen).
+# Each one replaces annual_avg_temp only (kind swap_metric, base lead_split3); the other three
+# metrics must stay identical to the default (metric-isolation test).
+#   t0_lead_split3   T0  default: lead_split3 temperature (champion trend, ridge in years 1-3)
+#   t1_recent_normal T1  Tatakae: last-15-valid-year city mean + regional warming rate x
+#                        (year - mid-year of the window); rate = mean 40-year trend of the 32
+#                        nearest cities
+#   t2_region_dep    T2  Tatakae: 0.75 x region+departure view + 0.25 x T1 (region anomaly =
+#                        mean of 32 nearest, each vs own 30-year mean; carried by its 30-year
+#                        trend line; departure = mean of the last 5 years)
+#   t3_two_scale     T3  PstarAlu: pooled-trend level + two-scale departure decay (regional part
+#                        within 300 km, local rest; pooled bias-corrected AR(1) per part)
+#   t4_mean_t0_t2    T4  equal-weight mean of T0 and T2
+#   t5_mean_t0_t2_t3 T5  equal-weight mean of T0, T2 and T3
+#   t6_t5_ridge13    T6  T5 with the lead_split3 ridge kept in years 1-3 only
+#   t7_gmst_scaling  T7  PstarAlu: global-pattern scaling on HadCRUT GMST (to 2018 only),
+#                        GMST forecast from a trend fitted inside the fold
+#   t7_mean_best     T7b equal-weight mean of T7 and the best of T0-T6 under the rule below
+#                        (determined by the rule from T0-T6 results, not by hand)
+#
+# SELECTION RULE (final round, Section 4). Written into this file before any candidate ran.
+# Do not change it after results are seen. Applied in code by
+# proto_star.robustness.apply_selection_rule (window "all" = all 7 forecast years, ADR 0009).
+# For this metric, a component replaces the default only if all three hold:
+#   1. its mean skill on the official folds (1980, 1995, 2011), all 7 years, is higher than the
+#      default's;
+#   2. its mean skill over the 27 rolling origins (1985-2011), all 7 years, is higher than the
+#      default's;
+#   3. it beats the default at >= 60% of the 27 origins (paired, same origin).
+# If more than one passes, choose the one with the highest mean over the 27 origins. If none
+# passes, keep the default. Report years_1_3 and years_4_7 too, but select on "all".
+# No leaderboard score and no 2019-2025 data is used for any choice.
+name: final_temp
+description: >
+  Final round, agent T: re-implemented temperature components of Tatakae and PstarAlu, each
+  replacing lead_split3's annual_avg_temp only, with pre-registered combinations.
+
+forecasters:
+  - thirty_year_mean
+  - t0_lead_split3
+  - t1_recent_normal
+  - t2_region_dep
+  - t3_two_scale
+  - t4_mean_t0_t2
+  - t5_mean_t0_t2_t3
+  - t6_t5_ridge13
+  - t7_gmst_scaling
+  - t7_mean_best
+
+models:
+  t0_lead_split3: {kind: lead_blend, params: {}}
+  # Fixed parameters: docs/trials/final_temp.md, "Interpretations and fixed parameters".
+  t1_recent_normal:
+    kind: swap_metric
+    params:
+      metric: annual_avg_temp
+      components: [{kind: final_temp_recent_normal, params: {}}]
+  t2_region_dep:
+    kind: swap_metric
+    params:
+      metric: annual_avg_temp
+      components: [{kind: final_temp_region_departure, params: {}}]
+  t3_two_scale:
+    kind: swap_metric
+    params:
+      metric: annual_avg_temp
+      components: [{kind: final_temp_two_scale, params: {}}]
+  t4_mean_t0_t2:
+    kind: swap_metric
+    params:
+      metric: annual_avg_temp
+      components:
+        - {kind: lead_blend, params: {}}
+        - {kind: final_temp_region_departure, params: {}}
+  t5_mean_t0_t2_t3:
+    kind: swap_metric
+    params:
+      metric: annual_avg_temp
+      components:
+        - {kind: lead_blend, params: {}}
+        - {kind: final_temp_region_departure, params: {}}
+        - {kind: final_temp_two_scale, params: {}}
+  t6_t5_ridge13:  # reading 1: leads 1-3 = lead_split3, leads 4-7 = T5
+    kind: swap_metric
+    params:
+      metric: annual_avg_temp
+      components:
+        - kind: final_temp_lead_switch
+          params:
+            last_early_lead: 3
+            early: {kind: lead_blend, params: {}}
+            late:
+              kind: swap_metric
+              params:
+                metric: annual_avg_temp
+                components:
+                  - {kind: lead_blend, params: {}}
+                  - {kind: final_temp_region_departure, params: {}}
+                  - {kind: final_temp_two_scale, params: {}}
+  t7_gmst_scaling:  # one pre-registered specification (40-y scaling, EB shrink, 30-y GMST line)
+    kind: swap_metric
+    params:
+      metric: annual_avg_temp
+      components:
+        - kind: final_temp_gmst_scaling
+          params: {scaling_window: 40, gmst_trend_window: 30, level_years: 15, n_cities: 32}
+  # Added after run 1, mechanically: the Section 4 rule picked T0 from T0-T6 (none passed).
+  t7_mean_best:
+    kind: swap_metric
+    params:
+      metric: annual_avg_temp
+      components:
+        - {kind: lead_blend, params: {}}
+        - kind: final_temp_gmst_scaling
+          params: {scaling_window: 40, gmst_trend_window: 30, level_years: 15, n_cities: 32}
+
+reference: thirty_year_mean
+submit: t0_lead_split3

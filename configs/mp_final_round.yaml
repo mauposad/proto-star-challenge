@@ -1,0 +1,99 @@
+# Final round, Section 3: combination (main session, after agents T, C and P report).
+# Run:    uv run proto-star climate-trial configs/mp_final_round.yaml --record
+# Check:  uv run python scripts/robustness_origins.py configs/mp_final_round.yaml \
+#           --origins rolling27 --default r2_lead_split3 --out runs/robustness/final_round
+# Package: uv run proto-star climate-package configs/mp_final_round.yaml
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+#
+# PRE-REGISTERED ROWS (fixed before any candidate ran):
+#   r1_thirty_year_mean  R1  reference
+#   r2_lead_split3       R2  current submission
+#   r3_crm_s6_eb_urban   R3  CRM row
+#   r4_winners           R4  per metric, the component chosen by the rule below from the agent
+#                            configs (mp_final_temp, mp_final_cdd, mp_final_precip_hot); the
+#                            default where none passes. Filled in mechanically from the rule.
+#   r5_winners_t0_c0     R5  R4 with T0 and C0 kept (only precipitation and hottest day change)
+#   r6_mean_r2_r3_r4     R6  equal-weight mean of R2, R3 and R4, per metric
+# The same rule then decides R4 vs R2 on raw_score (all metrics): submit R4 only if it passes;
+# otherwise submit R2. R5 and R6 are reported, not candidates for submission.
+#
+# SELECTION RULE (final round, Section 4). Written into this file before any candidate ran.
+# Do not change it after results are seen. Applied in code by
+# proto_star.robustness.apply_selection_rule (window "all" = all 7 forecast years, ADR 0009).
+# For this metric, a component replaces the default only if all three hold:
+#   1. its mean skill on the official folds (1980, 1995, 2011), all 7 years, is higher than the
+#      default's;
+#   2. its mean skill over the 27 rolling origins (1985-2011), all 7 years, is higher than the
+#      default's;
+#   3. it beats the default at >= 60% of the 27 origins (paired, same origin).
+# If more than one passes, choose the one with the highest mean over the 27 origins. If none
+# passes, keep the default. Report years_1_3 and years_4_7 too, but select on "all".
+# No leaderboard score and no 2019-2025 data is used for any choice.
+name: final_round
+description: >
+  Final round: per-metric components from the re-implemented Tatakae and PstarAlu methods,
+  chosen by a pre-registered rule and combined with lead_split3 and the CRM.
+
+forecasters:
+  - thirty_year_mean
+  - r2_lead_split3
+  - r3_crm_s6_eb_urban
+  # Added after the agents reported, mechanically from the rule (no other choice was made):
+  # temperature T0 (no candidate passed), CDD C0 (none passed; C1b = c1_map_t0 because T kept
+  # T0), precipitation P5, hottest day H4. R5 keeps T0 and C0 and so equals R4.
+  - r4_winners
+  - r5_winners_t0_c0
+  - r6_mean_r2_r3_r4
+
+models:
+  r2_lead_split3: {kind: lead_blend, params: {}}
+  r3_crm_s6_eb_urban:
+    {kind: crm, params: {regions: spectral, n_clusters: 6, flat_level: regional_eb, urban: true}}
+
+  # Components as run by agent P (configs/mp_final_precip_hot.yaml, rows p5 and h4).
+  r4_winners: &r4
+    kind: swap_metric
+    params:
+      metric: hottest_day_temp
+      base:
+        kind: swap_metric
+        params:
+          metric: total_precip_in
+          base: {kind: lead_blend, params: {}}
+          components:
+            - &p1 {kind: final_precip_nudge, params: {k: 31, recent_years: 10, fraction: 0.3, window: 30, min_years: 10}}
+            - &p3 {kind: final_precip_two_half, params: {fay_herriot: true, window: 30, long_window: 45, early_leads: 3, min_days: 360, min_valid: 10, min_complete: 10, min_complete_long: 15, median_shrink: 0.5, bandwidth_km: 300.0, record_years: 90, fh_min_window_years: 15, fh_min_record_years: 30, fh_min_kernel_weight: 0.5}}
+      components:
+        - &h1 {kind: final_hottest_nudge, params: {k: 31, recent_years: 10, fraction: 0.3, window: 30, min_years: 10}}
+        - &h2 {kind: final_hottest_second_high, params: {window: 30, min_days: 360, min_complete: 10, bandwidth_km: 300.0}}
+  r5_winners_t0_c0: *r4  # identical to R4: the rule kept T0 and C0
+  # R6: per metric, the equal-weight mean of R2, R3 and R4 (one swap per metric, nested).
+  r6_mean_r2_r3_r4:
+    kind: swap_metric
+    params:
+      metric: cdd
+      components: &r6_members
+        - {kind: lead_blend, params: {}}
+        - {kind: crm, params: {regions: spectral, n_clusters: 6, flat_level: regional_eb, urban: true}}
+        - *r4
+      base:
+        kind: swap_metric
+        params:
+          metric: hottest_day_temp
+          components: *r6_members
+          base:
+            kind: swap_metric
+            params:
+              metric: total_precip_in
+              components: *r6_members
+              base:
+                kind: swap_metric
+                params:
+                  metric: annual_avg_temp
+                  components: *r6_members
+                  base: {kind: lead_blend, params: {}}
+
+reference: thirty_year_mean
+# Set by the rule (R4 vs R2 on raw_score): R4 passed all three conditions (official 4.85 vs
+# 4.69, 27 origins 4.99 vs 4.72, wins at 27 of 27 origins). See docs/trials/final_round.md.
+submit: r4_winners

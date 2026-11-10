@@ -1,0 +1,35 @@
+# Final round, Section 1 step 4: reproduce the reference forecasters before any candidate runs.
+# Run:    uv run proto-star climate-trial configs/mp_final_references.yaml
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+# Logged scores to match (all / years 1-3 / years 4-7):
+#   trend_level10_15_sensitivity 4.14 / 0.33 / 6.92   (docs/trials/pooled_trend.md)
+#   h2_mean_cdd                  4.41 / 0.70 / 7.12   (lead_split3 package, code/evidence)
+#   lead_split3                  4.69 / 1.32 / 7.12   (lead_split3 package, code/evidence)
+#   crm_s6_eb_urban              4.39 / 0.51 / 7.23   (docs/trials/crm.md)
+name: final_references
+description: >
+  The four reference forecasters of the final round, reproduced on the official folds:
+  the pooled-trend champion, h2_mean_cdd, lead_split3 (current submission) and the CRM row.
+
+forecasters:
+  - thirty_year_mean
+  - trend_level10_15_sensitivity
+  - h2_mean_cdd
+  - lead_split3
+  - crm_s6_eb_urban
+
+pooled_trends:
+  trend_level10_15_sensitivity:
+    level_years: [10, 15]
+    trend_window: 40
+    cdd_sensitivity: true
+
+models:
+  # lead_split3, ported from hf://datasets/corbe19/protostar-climate-MKDir-lead @ 0449d70
+  lead_split3: {kind: lead_blend, params: {temp_trend_weights: [0.5, 0.5, 0.5, 1.0]}}
+  h2_mean_cdd: {kind: lead_blend, params: {temp_trend_weights: [1.0]}}
+  crm_s6_eb_urban:
+    {kind: crm, params: {regions: spectral, n_clusters: 6, flat_level: regional_eb, urban: true}}
+
+reference: thirty_year_mean
+submit: lead_split3

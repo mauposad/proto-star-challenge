@@ -259,6 +259,29 @@ again with the fold cut-off (`load_indices(cutoff_year)`, `load_sst_grid(cutoff_
   statistical reconstruction that NOAA re-runs as new data arrive; see the trial note.
 - **License:** public domain. **Use test:** yes; capped as above.
 
+#### HadCRUT4 global mean temperature (weather-responding; final round, agent T, T7)
+
+- **Source:** Met Office Hadley Centre / CRU, HadCRUT4 **version 4.6.0.0**, file
+  `HadCRUT.4.6.0.0.annual_ns_avg.txt` (annual global mean, ensemble median in column 2,
+  anomaly vs 1961-1990, degC), read from the Internet Archive snapshot of 2019-02-09
+  18:08:36 UTC (`https://web.archive.org/web/20190209180836id_/https://www.metoffice.gov.uk/hadobs/hadcrut4/data/current/time_series/HadCRUT.4.6.0.0.annual_ns_avg.txt`),
+  the file date PstarAlu cites. Morice, C. P., Kennedy, J. J., Rayner, N. A., Jones, P. D.
+  (2012), J. Geophys. Res. 117, D08101, doi:10.1029/2011JD017187.
+- **Download:** `uv run python scripts/download_hadcrut.py`. No server-side date filter
+  exists, so the script fetches the text into memory, drops every row after 2018
+  (`hadcrut.cap_text`) before anything is written or printed, checks the result with
+  `assert_weather_cutoff`, and writes only the capped file (never overwriting).
+- **File:** `data/external/hadcrut4/HadCRUT.4.6.0.0.annual_ns_avg_to_2018.txt`, 169 rows,
+  1850-2018, 12 columns, 17,576 bytes, SHA-256
+  `be752cf881ea97ab61d3e9d333d55837c62fd96cf1dfe91e8a48ca9cb6caa3d2`.
+- **Loader:** `proto_star.data.external.hadcrut.load_hadcrut4_annual(cutoff_year)` returns
+  `year, gmst`; it checks the 2018 cap, then the fold cut-off. Leak tests in
+  `tests/test_external_hadcrut.py` and `tests/test_final_temp.py`.
+- **License:** Crown copyright. The Met Office HadCRUT4 terms allow download "for the
+  purposes of private study and scientific research"; any other use needs a Met Office
+  licence. The file is not redistributed (`data/` is git-ignored). **Use test:** yes;
+  capped as above.
+
 ## Input artifact checksums
 
 | Local artifact | SHA-256 |

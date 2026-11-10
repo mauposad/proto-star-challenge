@@ -1,0 +1,96 @@
+# Final round, agent C: CDD components (branch agent/final-cdd).
+# Run:    uv run proto-star climate-trial configs/mp_final_cdd.yaml --record
+# Check:  uv run python scripts/robustness_origins.py configs/mp_final_cdd.yaml \
+#           --origins rolling27 --default c0_lead_split3 --out runs/robustness/final_cdd
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+#
+# PRE-REGISTERED CANDIDATES (fixed before any run; none may be added after results are seen).
+# Each one replaces cdd only (kind swap_metric, base lead_split3); the other three metrics must
+# stay identical to the default (metric-isolation test).
+#   c0_lead_split3   C0  default: lead_split3 CDD = mean of scaled trend and pooled ridge
+#   c1_map_t0        C1  Tatakae/PstarAlu daily map: each of the last 10 valid years' daily mean
+#                        temperatures shifted so the year mean equals the T0 temperature
+#                        forecast; recount CDD; mean over the 10 years
+#   c1_map_tbest     C1b same, driven by the temperature component agent T reports as chosen
+#                        by the rule (if T keeps T0, this row equals c1_map_t0; say so)
+#   c2_map_base3010  C2  PstarAlu: C1 (T0 temperature) with a base of the mean of a 30-year and
+#                        a 10-year window of complete years
+#   c3_half_c1_c0    C3  Tatakae weighting: 0.5 x C1 + 0.5 x C0
+#   c4_three_way     C4  equal-weight mean of the scaled trend, the ridge and C1
+#
+# SELECTION RULE (final round, Section 4). Written into this file before any candidate ran.
+# Do not change it after results are seen. Applied in code by
+# proto_star.robustness.apply_selection_rule (window "all" = all 7 forecast years, ADR 0009).
+# For this metric, a component replaces the default only if all three hold:
+#   1. its mean skill on the official folds (1980, 1995, 2011), all 7 years, is higher than the
+#      default's;
+#   2. its mean skill over the 27 rolling origins (1985-2011), all 7 years, is higher than the
+#      default's;
+#   3. it beats the default at >= 60% of the 27 origins (paired, same origin).
+# If more than one passes, choose the one with the highest mean over the 27 origins. If none
+# passes, keep the default. Report years_1_3 and years_4_7 too, but select on "all".
+# No leaderboard score and no 2019-2025 data is used for any choice.
+name: final_cdd
+description: >
+  Final round, agent C: CDD from a daily temperature map driven by a temperature forecast
+  (Tatakae, PstarAlu), and blends with lead_split3's CDD; each replaces CDD only.
+
+forecasters:
+  - thirty_year_mean
+  - c0_lead_split3
+  - c1_map_t0
+  # - c1_map_tbest  # run by the main session after agent T's branch is integrated
+  - c2_map_base3010
+  - c3_half_c1_c0
+  - c4_three_way
+
+models:
+  c0_lead_split3: {kind: lead_blend, params: {}}
+  c1_map_t0:
+    kind: swap_metric
+    params:
+      metric: cdd
+      components:
+        - kind: cdd_daily_map
+          params: {temperature: {kind: lead_blend, params: {}}, base: last_valid, windows: [10]}
+  # C1b: replace T_BEST_ENTRY by agent T's chosen model entry ({kind: ..., params: {...}}), e.g.
+  # the temperature component it reports. If T keeps T0, this row equals c1_map_t0.
+  # c1_map_tbest:
+  #   kind: swap_metric
+  #   params:
+  #     metric: cdd
+  #     components:
+  #       - kind: cdd_daily_map
+  #         params: {temperature: T_BEST_ENTRY, base: last_valid, windows: [10]}
+  c2_map_base3010:
+    kind: swap_metric
+    params:
+      metric: cdd
+      components:
+        - kind: cdd_daily_map
+          params:
+            temperature: {kind: lead_blend, params: {}}
+            base: complete_calendar
+            windows: [30, 10]
+  c3_half_c1_c0:
+    kind: swap_metric
+    params:
+      metric: cdd
+      components:
+        - kind: cdd_daily_map
+          params: {temperature: {kind: lead_blend, params: {}}, base: last_valid, windows: [10]}
+        - {kind: lead_blend, params: {}}
+      weights: [0.5, 0.5]
+  c4_three_way:
+    kind: swap_metric
+    params:
+      metric: cdd
+      components:
+        - kind: pooled_trend
+          params: {level_years: [10, 15], trend_window: 40, cdd_sensitivity: true}
+        - {kind: cdd_ridge, params: {}}
+        - kind: cdd_daily_map
+          params: {temperature: {kind: lead_blend, params: {}}, base: last_valid, windows: [10]}
+
+reference: thirty_year_mean
+submit: c0_lead_split3

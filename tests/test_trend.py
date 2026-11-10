@@ -152,3 +152,25 @@ def test_spec_rejects_unknown_settings() -> None:
 
 def test_resolve_forecaster_finds_a_pooled_trend() -> None:
     assert callable(resolve_forecaster("mine", None, {"mine": SPEC}))
+
+
+def test_segment_slope_ignores_a_station_step() -> None:
+    """A flat city whose new station reads 2 degrees warmer is not warming."""
+    years = list(range(1979, 2019))
+    frames = []
+    for city in ("A", "B"):
+        values = [50.0 + (2.0 if (city == "A" and y >= 1999) else 0.0) for y in years]
+        frame = _rows(city, "annual_avg_temp", values, years)
+        frame["segment"] = [2 if (city == "A" and y >= 1999) else 1 for y in years]
+        frames.append(frame)
+    history = pd.concat(frames, ignore_index=True)
+    by_city = PooledTrendSpec(level_years=[10], trend_window=40)
+    by_segment = PooledTrendSpec(level_years=[10], trend_window=40, slope_within="segment")
+    assert pooled_slope(history, "annual_avg_temp", 2018, by_city) > 0.01
+    assert pooled_slope(history, "annual_avg_temp", 2018, by_segment) == pytest.approx(0.0)
+
+
+def test_segment_slope_needs_a_segment_column() -> None:
+    spec = PooledTrendSpec(level_years=[10], trend_window=30, slope_within="segment")
+    with pytest.raises(ValueError, match="segment"):
+        pooled_slope(_history(), "annual_avg_temp", 2018, spec)

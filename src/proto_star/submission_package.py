@@ -317,6 +317,11 @@ def build_package(
 ) -> Path:
     """Write the submission folder for one forecaster and return its path."""
     cfg = load_trial_config(config_path)
+    if cfg.join_summer:
+        raise ValueError(
+            "packaging a trial that joins the summer table is not supported yet: the package "
+            "would also need data/interim/protostar/summer_means.parquet and its build script"
+        )
     name = forecaster or cfg.submit
     if name is None:
         raise ValueError("pass a forecaster or set `submit` in the trial config")

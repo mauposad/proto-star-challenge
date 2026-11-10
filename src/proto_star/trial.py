@@ -29,8 +29,10 @@ from proto_star.backtest import (
     resolve_forecaster,
     summarize_backtest,
 )
-from proto_star.climate import BASELINE_DESCRIPTIONS, DEFAULT_CUTOFFS, METRICS
+from proto_star.climate import BASELINE_DESCRIPTIONS, BASELINE_METHODS, DEFAULT_CUTOFFS, METRICS
 from proto_star.data.master import content_hash, load_master
+from proto_star.data.summer import join_summer, load_summer_means
+from proto_star.forecasters import CustomSpec, build_custom, describe_custom
 from proto_star.paths import PROJECT_ROOT, TRIAL_NOTES_DIR, TRIALS_DIR
 from proto_star.tracking import git_info, write_json
 from proto_star.trend import PooledTrendSpec
@@ -46,12 +48,20 @@ class TrialConfig(BaseModel):
     forecasters: list[str] = Field(min_length=1)
     ensembles: dict[str, dict[str, str]] = Field(default_factory=dict)
     pooled_trends: dict[str, PooledTrendSpec] = Field(default_factory=dict)
+    custom: dict[str, CustomSpec] = Field(default_factory=dict)  # kinds in proto_star.forecasters
+    join_summer: bool = False  # add per-year June-August means (proto_star.data.summer)
     reference: str = CURRENT_BEST  # what "beats the baseline" is counted against
     submit: str | None = None  # forecaster to package; pick it from validation results only
 
     @model_validator(mode="after")
     def _check_names(self) -> TrialConfig:
         known = set(self.forecasters)
+        taken = (
+            set(self.ensembles) | set(self.pooled_trends) | set(BASELINE_METHODS) | {CURRENT_BEST}
+        )
+        clashes = sorted(set(self.custom) & taken)
+        if clashes:
+            raise ValueError(f"custom forecaster names {clashes} are already used")
         if self.reference not in known:
             raise ValueError(f"reference {self.reference!r} must be one of the forecasters")
         if self.submit is not None and self.submit not in known:
@@ -64,15 +74,41 @@ def load_trial_config(path: Path) -> TrialConfig:
     return TrialConfig.model_validate(yaml.safe_load(path.read_text()))
 
 
+def trial_master(cfg: TrialConfig, master: pd.DataFrame | None = None) -> pd.DataFrame:
+    """The table a trial's forecasters see: the master, plus any per-year columns it joins."""
+    data = load_master() if master is None else master
+    if cfg.join_summer and "jja_tmax" not in data.columns:
+        data = join_summer(data, load_summer_means())
+    return data
+
+
 def build_forecasters(cfg: TrialConfig) -> dict[str, Forecaster]:
-    """Turn the names in a config into callable forecasters."""
-    return {
-        name: resolve_forecaster(name, cfg.ensembles, cfg.pooled_trends) for name in cfg.forecasters
-    }
+    """Turn the names in a config into callable forecasters.
+
+    Custom forecasters may name any other forecaster the config can resolve, including other
+    custom ones; a cycle is an error.
+    """
+    built: dict[str, Forecaster] = {}
+
+    def resolve(name: str, chain: tuple[str, ...] = ()) -> Forecaster:
+        if name in chain:
+            raise ValueError(f"custom forecasters refer to each other in a cycle: {[*chain, name]}")
+        if name not in built:
+            if name in cfg.custom:
+                built[name] = build_custom(
+                    cfg.custom[name], lambda member: resolve(member, (*chain, name))
+                )
+            else:
+                built[name] = resolve_forecaster(name, cfg.ensembles, cfg.pooled_trends)
+        return built[name]
+
+    return {name: resolve(name) for name in cfg.forecasters}
 
 
 def describe_forecaster(name: str, cfg: TrialConfig) -> str:
     """One line saying what a forecaster does, for notes and READMEs."""
+    if name in cfg.custom:
+        return describe_custom(cfg.custom[name])
     if name in cfg.pooled_trends:
         spec = cfg.pooled_trends[name]
         cdd = (
@@ -80,10 +116,13 @@ def describe_forecaster(name: str, cfg: TrialConfig) -> str:
             if spec.cdd_sensitivity
             else "CDD trend = pooled CDD slope"
         )
+        within = (
+            "; slope fitted within city x station segment" if spec.slope_within == "segment" else ""
+        )
         return (
             f"Mean of last-{spec.level_years}-valid-year levels plus a non-negative pooled "
-            f"{spec.trend_window}-year trend for temperature and CDD; {cdd}; 30-year mean for "
-            "precipitation and hottest day"
+            f"{spec.trend_window}-year trend for temperature and CDD; {cdd}{within}; 30-year mean "
+            "for precipitation and hottest day"
         )
     if name in cfg.ensembles:
         return "Per metric: " + ", ".join(f"{m}={cfg.ensembles[name][m]}" for m in METRICS)
@@ -176,7 +215,7 @@ def run_trial(
 ) -> Path:
     """Score a trial config and return the run directory holding its record."""
     cfg = load_trial_config(config_path)
-    data = load_master() if master is None else master
+    data = trial_master(cfg, master)
     results = compare_forecasters(build_forecasters(cfg), data, cutoffs=DEFAULT_CUTOFFS)
 
     now = datetime.now()

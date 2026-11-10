@@ -18,6 +18,7 @@ Two choices are specific to this model:
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -39,6 +40,11 @@ class PooledTrendSpec(BaseModel):
     trend_window: int = Field(ge=10)  # calendar years used to fit the pooled slope
     min_city_years: int = Field(default=10, ge=3)  # valid years a city needs to enter a fit
     cdd_sensitivity: bool = True  # False: CDD uses its own pooled slope, the same for all cities
+    # "segment": demean within city x station segment, so a station switch inside the window
+    # is not read as warming or cooling. Needs a `segment` column in the history.
+    slope_within: Literal["city", "segment"] = "city"
+    # Multiplies every city's slope (E3 fits it in-fold; 0 gives the level-only forecast).
+    slope_scale: float = Field(default=1.0, ge=0.0)
 
 
 def _window_anomalies(
@@ -49,9 +55,14 @@ def _window_anomalies(
     window = history.loc[
         (history["metric"] == metric) & history["year"].between(first_year, cutoff_year)
     ]
-    by_city = window.groupby("city_id")
+    groups = ["city_id"]
+    if spec.slope_within == "segment":
+        if "segment" not in window.columns:
+            raise ValueError("slope_within='segment' needs a `segment` column in the history")
+        groups = ["city_id", "segment"]
+    by_city = window.groupby(groups)
     window = window.loc[by_city["year"].transform("size") >= spec.min_city_years]
-    by_city = window.groupby("city_id")
+    by_city = window.groupby(groups)
     return pd.DataFrame(
         {
             "city_id": window["city_id"],
@@ -106,10 +117,13 @@ def _city_slopes(
 ) -> pd.Series:
     own_slope = pooled_slope(history, metric, cutoff_year, spec)
     if metric != CDD or not spec.cdd_sensitivity:
-        return pd.Series(own_slope, index=cities)
+        return pd.Series(own_slope * spec.slope_scale, index=cities)
     warming = pooled_slope(history, TEMPERATURE, cutoff_year, spec)
     # Cities too sparse to estimate their own sensitivity fall back to the pooled CDD slope.
-    return (cdd_per_degree(history, cutoff_year, spec) * warming).reindex(cities).fillna(own_slope)
+    slopes = (
+        (cdd_per_degree(history, cutoff_year, spec) * warming).reindex(cities).fillna(own_slope)
+    )
+    return slopes * spec.slope_scale
 
 
 def _trend_rows(

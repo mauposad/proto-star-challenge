@@ -280,6 +280,16 @@ and H2.
 Compared with lead_split3, only precipitation (1,449 rows; mean -0.16 in) and hottest day
 (1,463 rows; mean +0.002 F) change. Temperature and CDD are identical. It was not uploaded.
 
+**Package fix (2026-11-10).** The first package did not reproduce on its own: H2 reads the
+daily table, which the package did not ship, so the publish workflow's "reproduce from the
+package alone" step would have failed (the local check passed only because the repo's
+`data/raw` was found). Now `climate-package` ships `daily.parquet` (unchanged CMU copy,
+49 MB) whenever the submitted forecaster contains a daily-reading kind
+(`final_hottest_second_high`, `cdd_daily_map`), and `daily_fold` falls back to the packaged
+copy. A test covers it. The rebuilt package `submissions/20261110-000932_final_round/`
+reproduces from an isolated copy, and its `submission.csv` is byte-identical to the first
+(sha256 `e33a07d3...`). The workflow's default `config` is now `configs/mp_final_round.yaml`.
+
 ## 7. Open points for the human
 
 1. **HadCRUT4 licence.** Agent T found the Met Office terms: Crown copyright, use "for private

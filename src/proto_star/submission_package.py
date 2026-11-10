@@ -27,6 +27,7 @@ import yaml
 
 from proto_star.backtest import build_submission, compare_forecasters, summarize_backtest
 from proto_star.climate import DEFAULT_CUTOFFS, METRICS, ClimateSubmissionError
+from proto_star.data.daily_fold import DAILY_FILE
 from proto_star.data.master import MANIFEST_FILE, MASTER_FILE, load_master
 from proto_star.data.protostar import PROTOSTAR_DIR
 from proto_star.paths import PROJECT_ROOT, SUBMISSIONS_DIR
@@ -41,6 +42,9 @@ from proto_star.trial import (
 
 RAW_INPUTS = ("annual_indices.parquet", "city_info.parquet")
 CITY_STATIC_FILE = "city_static.parquet"
+# Kinds that read daily records (``proto_star.data.daily_fold``). A package whose submitted
+# forecaster contains one of them, at any depth, ships the daily table so it can reproduce.
+DAILY_KINDS = frozenset({"final_hottest_second_high", "cdd_daily_map"})
 # Scripts shipped in code/scripts: the data pipeline, plus the ones that produced the evidence.
 PIPELINE_SCRIPTS = ("download_protostar_data.py", "build_master_dataset.py")
 EVIDENCE_SCRIPTS = ("compare_baselines.py", "evaluate_metric_ensemble.py")
@@ -152,12 +156,39 @@ def _urban_city_static_source(cfg: TrialConfig, forecaster: str) -> Path | None:
     return _default_city_static_path()
 
 
+def _kinds_in(value: object) -> set[str]:
+    """Every ``kind`` named in a model entry, including nested component entries."""
+    found: set[str] = set()
+    if isinstance(value, dict):
+        if isinstance(value.get("kind"), str):
+            found.add(value["kind"])
+        for item in value.values():
+            found |= _kinds_in(item)
+    elif isinstance(value, list):
+        for item in value:
+            found |= _kinds_in(item)
+    return found
+
+
+def needs_daily(cfg: TrialConfig, forecaster: str) -> bool:
+    """True if the forecaster reads the daily table, so its package must ship it."""
+    entry = cfg.models.get(forecaster)
+    return entry is not None and bool(_kinds_in(entry.model_dump()) & DAILY_KINDS)
+
+
 def _copy_data(
-    data_dir: Path, master_dir: Path, raw_dir: Path, city_static_source: Path | None = None
+    data_dir: Path,
+    master_dir: Path,
+    raw_dir: Path,
+    city_static_source: Path | None = None,
+    *,
+    daily: bool = False,
 ) -> list[Path]:
     data_dir.mkdir()
     sources = [master_dir / MASTER_FILE, master_dir / MANIFEST_FILE]
     sources += [raw_dir / name for name in RAW_INPUTS]
+    if daily:
+        sources.append(raw_dir / DAILY_FILE)
     for source in sources:
         shutil.copyfile(source, data_dir / source.name)
     copied = [data_dir / source.name for source in sources]
@@ -187,6 +218,11 @@ def _data_card(files: list[Path], manifest: dict[str, object]) -> str:
             "CMU city list: station ID, name, latitude, longitude",
             "unchanged copy",
         ),
+        DAILY_FILE: (
+            "CMU daily records (tmax, tmin, prcp) through 2018-12-31; read by the submitted "
+            "forecaster through `proto_star.data.daily_fold`, capped at each fold cut-off",
+            "unchanged copy",
+        ),
         CITY_STATIC_FILE: (
             "Population-only city table: station ID and decennial county population, "
             "1970-2020; no land-cover, geography, reanalysis or weather fields",
@@ -203,6 +239,9 @@ def _data_card(files: list[Path], manifest: dict[str, object]) -> str:
         }
     )
     sources = manifest.get("sources_sha256", {})
+    shipped = {f.name for f in files}
+    left_out = [n for n in ("daily", "coverage_and_stations") if f"{n}.parquet" not in shipped]
+    not_copied = ", ".join(f"`{name}`" for name in left_out)
     return f"""# Data card
 
 Weather inputs end on 2018-12-31. No later observation is read, and the code stops with an
@@ -228,7 +267,7 @@ error if it finds one (`assert_weather_cutoff`).
 
 | Source | Why not copied | How to download |
 |---|---|---|
-| `daily`, `coverage_and_stations` (parquet) | ~50 MB; only to rebuild the master | {DOWNLOAD} |
+| {not_copied} (parquet) | only needed to rebuild the master | {DOWNLOAD} |
 
 SHA-256 of the sources the master table was built from: `{json.dumps(sources)}`.
 
@@ -321,7 +360,8 @@ Mean `raw_score` (the official score without its floor at zero) and per-metric s
 {markdown_table(summary.drop(columns="origins"))}
 
 `origins_beating_baseline` counts the folds (out of {len(DEFAULT_CUTOFFS)}) where the method beats
-`{cfg.reference}`. `years_4_7` matches the Final Score window.
+`{cfg.reference}`. The Final Score uses all seven years (2019-2025) with equal weight, so
+`all` is the matching window.
 
 ## AI tools and agents
 
@@ -391,7 +431,9 @@ def build_package(
     if name != cfg.submit:
         _set_packaged_submit(out_dir / "code" / "trial.yaml", name)
     city_static_source = _urban_city_static_source(cfg, name)
-    files = _copy_data(out_dir / "data", master_dir, raw_dir, city_static_source)
+    files = _copy_data(
+        out_dir / "data", master_dir, raw_dir, city_static_source, daily=needs_daily(cfg, name)
+    )
     manifest = json.loads((master_dir / MANIFEST_FILE).read_text())
     (out_dir / "data" / "README.md").write_text(_data_card(files, manifest))
     meta = {**git_info(), "date": now.strftime("%Y-%m-%d")}

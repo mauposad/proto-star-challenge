@@ -8,7 +8,7 @@ on:
     inputs:
       config:
         description: Trial config naming the forecaster to submit (its `submit` key)
-        default: configs/mp_baselines_round1.yaml
+        default: configs/mp_final_round.yaml
       forecaster:
         description: Optional override of the config's `submit` forecaster
         default: ""

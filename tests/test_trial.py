@@ -108,7 +108,7 @@ def _package(
 ) -> Path:
     master_dir, raw_dir = tmp_path / "processed", tmp_path / "raw"
     master_dir.mkdir()
-    raw_dir.mkdir()
+    raw_dir.mkdir(exist_ok=True)
     master = _city_master()
     master.to_parquet(master_dir / MASTER_FILE, index=False)
     (master_dir / MANIFEST_FILE).write_text('{"content_hash": "abc", "sources_sha256": {}}')
@@ -257,3 +257,64 @@ def test_package_lists_any_placeholder_left_in_the_team_file(
     )
     package = _package(config_path, tmp_path, team_path=team)
     assert any("Team Name" in item for item in open_placeholders(package))
+
+
+def test_daily_forecaster_package_ships_daily_and_reproduces_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A forecaster that reads daily data (nested in swap_metric) ships the daily table and
+    reproduces from the package alone, as the publish workflow's reproduce step does."""
+    from proto_star.data import daily_fold
+    from proto_star.submission_package import needs_daily
+
+    config = {
+        "name": "daily_package",
+        "description": "Tiny daily-reading packaging test.",
+        "forecasters": ["thirty_year_mean", "second_high"],
+        "models": {
+            "second_high": {
+                "kind": "swap_metric",
+                "params": {
+                    "metric": "hottest_day_temp",
+                    "base": {
+                        "kind": "pooled_trend",
+                        "params": {"level_years": [10], "trend_window": 30},
+                    },
+                    "components": [{"kind": "final_hottest_second_high", "params": {}}],
+                },
+            }
+        },
+        "reference": "thirty_year_mean",
+        "submit": "second_high",
+    }
+    config_path = tmp_path / "daily.yaml"
+    config_path.write_text(yaml.safe_dump(config))
+    assert needs_daily(load_trial_config(config_path), "second_high")
+    assert not needs_daily(load_trial_config(config_path), "thirty_year_mean")
+
+    frames = []
+    for city, year, hottest in _city_master()[["ID", "Year", "Max Tmax"]].itertuples(index=False):
+        dates = pd.date_range(f"{year}-01-01", f"{year}-12-31", freq="D")
+        tmax = [80.0] * len(dates)
+        tmax[100], tmax[200] = hottest, hottest - 2.0
+        frames.append(pd.DataFrame({"ID": city, "Name": city, "Date": dates, "tmax": tmax}))
+    daily = pd.concat(frames, ignore_index=True).assign(tmin=60.0, prcp=0.1)
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    daily.to_parquet(raw_dir / "daily.parquet", index=False)
+    monkeypatch.setattr(daily_fold, "DAILY_DIR", raw_dir)  # never the repo's data/raw
+
+    package = _package(config_path, tmp_path)
+    assert (package / "data" / "daily.parquet").exists()
+    data_card = (package / "data" / "README.md").read_text()
+    assert "CMU daily records" in data_card
+    assert "| `coverage_and_stations` (parquet)" in data_card
+
+    reproduced = subprocess.run(
+        [sys.executable, package / "code" / "reproduce.py"],
+        cwd=package,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "OK:" in reproduced.stdout

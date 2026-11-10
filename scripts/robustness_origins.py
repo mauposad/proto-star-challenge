@@ -11,15 +11,14 @@ from pathlib import Path
 
 from proto_star.backtest import compare_forecasters
 from proto_star.climate import DEFAULT_CUTOFFS
-from proto_star.data.master import load_master
-from proto_star.trial import build_forecasters, load_trial_config
+from proto_star.trial import build_forecasters, load_trial_config, trial_master
 
 ORIGINS = sorted({*DEFAULT_CUTOFFS, 1985, 1990, 2000, 2005})
 
 
 def main() -> None:
     cfg = load_trial_config(Path(sys.argv[1]))
-    results = compare_forecasters(build_forecasters(cfg), load_master(), cutoffs=ORIGINS)
+    results = compare_forecasters(build_forecasters(cfg), trial_master(cfg), cutoffs=ORIGINS)
     for window in ("all", "years_4_7"):
         table = results.loc[results["window"] == window].pivot_table(
             index="method", columns="cutoff_year", values="raw_score"

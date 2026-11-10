@@ -1,0 +1,41 @@
+# Family 1 of the round-1 tests (hypotheses.md: H16 persistence, H5 CDD from temperature).
+# All claims are exploratory (methodologist X2/X3). Primary endpoints, declared before this run,
+# each a paired year-block bootstrap against trend_level10_15_sensitivity on the ADR 0004 folds
+# (scripts/paired_bootstrap.py):
+#   h16_persistence      -> raw-score difference, lead years 1-3
+#   h5_cdd_from_temp     -> CDD skill difference, all years
+#   h5_h16_combined      -> raw-score difference, all years
+# Decision rule: an arm "passes" when its 95% interval excludes 0 in the favourable direction.
+# Run:    uv run proto-star climate-trial configs/at_family_persistence_cdd.yaml --record
+# Paired: uv run python scripts/paired_bootstrap.py configs/at_family_persistence_cdd.yaml
+name: family_persistence_cdd
+description: >
+  H16 (lead 1-3 persistence of last year's error), H5 (CDD from its 30-year mean plus CDD per
+  degree times the temperature forecast's departure) and both combined, each on top of
+  trend_level10_15_sensitivity.
+
+forecasters:
+  - thirty_year_mean
+  - trend_level10_15_sensitivity   # reference: the current submission candidate
+  - h16_persistence
+  - h5_cdd_from_temp
+  - h5_h16_combined
+
+pooled_trends:
+  trend_level10_15_sensitivity:
+    level_years: [10, 15]
+    trend_window: 40
+    cdd_sensitivity: true
+
+custom:
+  h16_persistence:
+    kind: persistence
+    params: {base: trend_level10_15_sensitivity, metrics: [annual_avg_temp, cdd], max_lead: 3}
+  h5_cdd_from_temp:
+    kind: cdd_from_temp
+    params: {base: trend_level10_15_sensitivity}
+  h5_h16_combined:
+    kind: persistence
+    params: {base: h5_cdd_from_temp, metrics: [annual_avg_temp, cdd], max_lead: 3}
+
+reference: trend_level10_15_sensitivity

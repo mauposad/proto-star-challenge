@@ -1,0 +1,48 @@
+# Family 3 of the round-1 tests (hypotheses.md: H4 x H11 as a 2x2, plus the shrink-to-zero
+# control the methodologist asked for). All claims are exploratory. Primary endpoints, declared
+# before this run, each a paired year-block bootstrap against trend_level10_15_sensitivity on
+# the ADR 0004 folds:
+#   h4_common_residual -> temperature skill difference, lead years 4-7
+#   h11_region_shrink  -> temperature skill difference, lead years 1-3
+#   h4_h11             -> raw-score difference, all years
+#   h11_zero_control   -> compared with h11_region_shrink on the same endpoint. If it does as
+#                         well, the H11 gain is plain damping toward the 30-year mean
+#                         (rival (c)), not regional pooling.
+# Decision rule: an arm passes when its 95% interval excludes 0 in the favourable direction.
+# Run:    uv run proto-star climate-trial configs/at_family_levels.yaml --record
+# Paired: uv run python scripts/paired_bootstrap.py configs/at_family_levels.yaml
+name: family_levels
+description: >
+  Level adjustments to the candidate's temperature and CDD: remove the shared national residual
+  from the pooled trend (H4); shrink city anomalies toward their region's leave-one-out mean
+  (H11); both; and the same shrinkage toward zero as a control.
+
+forecasters:
+  - thirty_year_mean
+  - trend_level10_15_sensitivity   # reference: the current submission candidate
+  - h4_common_residual
+  - h11_region_shrink
+  - h4_h11
+  - h11_zero_control
+
+pooled_trends:
+  trend_level10_15_sensitivity:
+    level_years: [10, 15]
+    trend_window: 40
+    cdd_sensitivity: true
+
+custom:
+  h4_common_residual:
+    kind: level_adjust
+    params: {base: trend_level10_15_sensitivity, common_residual: true}
+  h11_region_shrink:
+    kind: level_adjust
+    params: {base: trend_level10_15_sensitivity, shrink: region}
+  h4_h11:
+    kind: level_adjust
+    params: {base: trend_level10_15_sensitivity, common_residual: true, shrink: region}
+  h11_zero_control:
+    kind: level_adjust
+    params: {base: trend_level10_15_sensitivity, shrink: zero}
+
+reference: trend_level10_15_sensitivity

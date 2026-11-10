@@ -1,0 +1,30 @@
+# Round 2, nested comparison (methodologist R2-X4): is the diurnal split better than E2's single
+# coefficient? The reference is E2 itself. The only difference between the arms is how
+# temperature's city part is weighted; CDD uses E2's shrinkage in both. Exploratory.
+# Primary endpoint, declared before this run: temperature skill difference, all years, paired
+# year-block bootstrap against e2_temp_city_shrink.
+# Paired: uv run python scripts/paired_bootstrap.py configs/at_round2_nested.yaml [--origins seven|early|replication]
+name: round2_nested
+description: >
+  The H23/H32 diurnal split for temperature (plus E2's CDD shrinkage) scored against E2's single
+  city coefficient for both metrics.
+
+forecasters:
+  - e2_temp_city_shrink   # reference: the nested parent
+  - h23_temp_e2_cdd
+
+pooled_trends:
+  trend_level10_15_sensitivity: {level_years: [10, 15], trend_window: 40, cdd_sensitivity: true}
+
+custom:
+  e2_temp_city_shrink:
+    kind: anomaly_correction
+    params: {base: trend_level10_15_sensitivity, metrics: [annual_avg_temp, cdd], window: 15}
+  e2_cdd_only:
+    kind: anomaly_correction
+    params: {base: trend_level10_15_sensitivity, metrics: [cdd], window: 15}
+  h23_temp_e2_cdd:
+    kind: anomaly_correction
+    params: {base: e2_cdd_only, metrics: [annual_avg_temp], window: 15, split: diurnal}
+
+reference: e2_temp_city_shrink

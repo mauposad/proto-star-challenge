@@ -1,0 +1,42 @@
+# Trial: the cheap master-only arms of round 1 in hypotheses.md, each layered on the current
+# candidate so that only one metric or one horizon changes.
+# Run:    uv run proto-star climate-trial configs/at_round1_cheap.yaml --record
+# Check:  uv run python scripts/robustness_origins.py configs/at_round1_cheap.yaml
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+name: round1_cheap
+description: >
+  H3 (closed-form gamma shift of the precipitation 30-year mean, q = 1/3), H13 (the same shift
+  with q fitted in-fold), H5 (CDD from its 30-year mean plus CDD per degree times the temperature
+  forecast's departure) and H16 (lead 1-3 persistence of last year's error), each on top of
+  trend_level10_15_sensitivity.
+
+forecasters:
+  - thirty_year_mean
+  - current_best
+  - trend_level10_15_sensitivity   # reference: the current submission candidate
+  - h3_precip_gamma_shift
+  - h13_precip_fitted_shift
+  - h5_cdd_from_temp
+  - h16_persistence
+
+pooled_trends:
+  trend_level10_15_sensitivity:
+    level_years: [10, 15]
+    trend_window: 40
+    cdd_sensitivity: true
+
+custom:
+  h3_precip_gamma_shift:
+    kind: skew_shift
+    params: {base: trend_level10_15_sensitivity, metrics: [total_precip_in], q: 0.3333333}
+  h13_precip_fitted_shift:
+    kind: skew_shift
+    params: {base: trend_level10_15_sensitivity, metrics: [total_precip_in]}
+  h5_cdd_from_temp:
+    kind: cdd_from_temp
+    params: {base: trend_level10_15_sensitivity}
+  h16_persistence:
+    kind: persistence
+    params: {base: trend_level10_15_sensitivity, metrics: [annual_avg_temp, cdd], max_lead: 3}
+
+reference: trend_level10_15_sensitivity

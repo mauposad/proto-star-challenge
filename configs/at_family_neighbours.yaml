@@ -1,0 +1,123 @@
+# Family 4 of the round-1 tests (hypotheses.md: H1 neighbour anchoring, scoped by the
+# methodologist to precipitation and hottest day). All claims are exploratory. Primary
+# endpoint, declared before this run: raw-score difference, all years, for h1_anchored against
+# trend_level10_15_sensitivity on the ADR 0004 folds (paired year-block bootstrap). Only
+# precipitation and hottest day change.
+# Decision rule: h1_anchored passes when its 95% interval excludes 0 AND its difference exceeds
+# the 95th percentile of the 20 placebo arms (h1_placebo_00..19: distant random neighbours).
+# Rival (b), "a longer window": h1_own_segment, which uses no neighbours.
+# Extra arm (methodologist H1-b): h1_all_cities.
+# Run:    uv run proto-star climate-trial configs/at_family_neighbours.yaml --record
+# Paired: uv run python scripts/paired_bootstrap.py configs/at_family_neighbours.yaml
+name: family_neighbours
+description: >
+  Precipitation and hottest-day levels moved from the 30-year mean toward a neighbour-anchored
+  value (the city's offset from its 5 nearest neighbours over its current station segment), by
+  a pooled weight. Controls: the city's own current-segment mean, all cities as neighbours, and
+  20 placebo draws of distant neighbours.
+
+forecasters:
+  - thirty_year_mean
+  - trend_level10_15_sensitivity   # reference: the current submission candidate
+  - h1_anchored
+  - h1_own_segment
+  - h1_all_cities
+  - h1_placebo_00
+  - h1_placebo_01
+  - h1_placebo_02
+  - h1_placebo_03
+  - h1_placebo_04
+  - h1_placebo_05
+  - h1_placebo_06
+  - h1_placebo_07
+  - h1_placebo_08
+  - h1_placebo_09
+  - h1_placebo_10
+  - h1_placebo_11
+  - h1_placebo_12
+  - h1_placebo_13
+  - h1_placebo_14
+  - h1_placebo_15
+  - h1_placebo_16
+  - h1_placebo_17
+  - h1_placebo_18
+  - h1_placebo_19
+
+pooled_trends:
+  trend_level10_15_sensitivity:
+    level_years: [10, 15]
+    trend_window: 40
+    cdd_sensitivity: true
+
+custom:
+  h1_anchored:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: anchored}
+  h1_own_segment:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: own_segment}
+  h1_all_cities:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: all_cities}
+  h1_placebo_00:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 0}
+  h1_placebo_01:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 1}
+  h1_placebo_02:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 2}
+  h1_placebo_03:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 3}
+  h1_placebo_04:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 4}
+  h1_placebo_05:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 5}
+  h1_placebo_06:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 6}
+  h1_placebo_07:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 7}
+  h1_placebo_08:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 8}
+  h1_placebo_09:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 9}
+  h1_placebo_10:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 10}
+  h1_placebo_11:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 11}
+  h1_placebo_12:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 12}
+  h1_placebo_13:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 13}
+  h1_placebo_14:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 14}
+  h1_placebo_15:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 15}
+  h1_placebo_16:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 16}
+  h1_placebo_17:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 17}
+  h1_placebo_18:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 18}
+  h1_placebo_19:
+    kind: neighbours
+    params: {base: trend_level10_15_sensitivity, arm: placebo, seed: 19}
+
+reference: trend_level10_15_sensitivity

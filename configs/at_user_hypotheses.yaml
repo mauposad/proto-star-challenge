@@ -1,0 +1,42 @@
+# Trial: the user hypotheses U1-U3 in hypotheses.md, against the current candidate.
+# Run:    uv run proto-star climate-trial configs/at_user_hypotheses.yaml --record
+# Check:  uv run python scripts/robustness_origins.py configs/at_user_hypotheses.yaml
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+name: user_hypotheses
+description: >
+  U1 pooled direct multi-horizon median model (linear and boosted), U2 equal-weight blend of the
+  pooled trend and current_best, U3 pooled trend with the slope fitted within station segments.
+  All are compared with the current candidate trend_level10_15_sensitivity.
+
+forecasters:
+  - thirty_year_mean
+  - current_best
+  - trend_level10_15_sensitivity   # reference: the current submission candidate
+  - u1_direct_linear
+  - u1_direct_gbm
+  - u2_blend_trend_current
+  - u3_trend_segment_slope
+
+pooled_trends:
+  trend_level10_15_sensitivity:
+    level_years: [10, 15]
+    trend_window: 40
+    cdd_sensitivity: true
+  u3_trend_segment_slope:
+    level_years: [10, 15]
+    trend_window: 40
+    cdd_sensitivity: true
+    slope_within: segment
+
+custom:
+  u1_direct_linear:
+    kind: direct
+    params: {model: linear, metrics: [annual_avg_temp, cdd], seed: 0}
+  u1_direct_gbm:
+    kind: direct
+    params: {model: gbm, metrics: [annual_avg_temp, cdd], seed: 0}
+  u2_blend_trend_current:
+    kind: blend
+    params: {members: [trend_level10_15_sensitivity, current_best]}
+
+reference: trend_level10_15_sensitivity

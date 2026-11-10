@@ -1,0 +1,34 @@
+# Round 3, H36 (hypotheses.md): add the Tmin-minus-Tmax contrast of the recent temperature
+# anomaly, scaled by CDD per degree, to E2's CDD correction. Exploratory.
+# Primary endpoint, declared before this run: CDD skill difference, all years, paired year-block
+# bootstrap against the nested parent e2_cdd_only, on the ADR 0004 folds.
+# Refuted if gamma (beta_contrast) <= 0 at any official cut-off, or the paired difference is
+# <= 0 on the official folds or the replication set (1934/1941/1948).
+# Pseudo-origins: p = C-30 .. C-1. Anomalies, 30-year means, cross-city means and CDD per
+# degree are recomputed from rows <= p; the candidate is refit at each p.
+# Paired: uv run python scripts/paired_bootstrap.py configs/at_round3_h36.yaml [--origins seven|early|replication]
+name: round3_h36
+description: >
+  E2's CDD shrinkage plus a coefficient on the city part of the (Tmin - Tmax)/2 temperature
+  anomaly scaled by each city's CDD per degree (H36), against E2's CDD shrinkage alone.
+
+forecasters:
+  - e2_cdd_only   # reference: the nested parent
+  - h36_cdd_contrast
+
+pooled_trends:
+  trend_level10_15_sensitivity: {level_years: [10, 15], trend_window: 40, cdd_sensitivity: true}
+
+custom:
+  e2_cdd_only:
+    kind: anomaly_correction
+    params: {base: trend_level10_15_sensitivity, metrics: [cdd], window: 15}
+  h36_cdd_contrast:
+    kind: anomaly_correction
+    params:
+      base: trend_level10_15_sensitivity
+      metrics: [cdd]
+      window: 15
+      split: diurnal_contrast
+
+reference: e2_cdd_only

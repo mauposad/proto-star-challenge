@@ -1,0 +1,28 @@
+# Round 3, H26 (hypotheses.md): E2's city-part coefficient varies linearly with lead,
+# lambda_h = 1 + beta_0 + beta_1 (h - 4), with beta_1 clipped to [-0.2, 0.2]. Exploratory.
+# Primary endpoint, declared before this run: raw-score difference, all years, paired year-block
+# bootstrap against the nested parent E2 (temperature and CDD), on the ADR 0004 folds.
+# Refuted if beta_1 (beta_city_lead) >= 0 for temperature at 2 or more of 3 cut-offs, or the
+# primary point estimate is <= 0. If beta_1 < 0 but the interval includes 0, the result is
+# inconclusive and the change is not adopted.
+# Paired: uv run python scripts/paired_bootstrap.py configs/at_round3_h26.yaml [--origins seven|early|replication]
+name: round3_h26
+description: >
+  E2 with a lead-dependent city-part coefficient (H26), against E2 with a single coefficient.
+
+forecasters:
+  - e2_temp_city_shrink   # reference: the nested parent
+  - h26_lead_slope
+
+pooled_trends:
+  trend_level10_15_sensitivity: {level_years: [10, 15], trend_window: 40, cdd_sensitivity: true}
+
+custom:
+  e2_temp_city_shrink:
+    kind: anomaly_correction
+    params: {base: trend_level10_15_sensitivity, metrics: [annual_avg_temp, cdd], window: 15}
+  h26_lead_slope:
+    kind: anomaly_correction
+    params: {base: trend_level10_15_sensitivity, metrics: [annual_avg_temp, cdd], window: 15, lead_slope: true}
+
+reference: e2_temp_city_shrink

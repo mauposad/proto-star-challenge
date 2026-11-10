@@ -1,0 +1,30 @@
+# Round 3, H27 (hypotheses.md): E1's early-origin hottest-day gain is a 1930s/1950s regime
+# artefact, so E1 run exactly as before loses at the unseen replication origins.
+# Relabelled EXPLORATORY after the round-3 critique (methodologist R3-H27-a). Written as confirmatory
+# for the 1941 sign and the pooled replication sign: E1 has not been run on these origins.
+# Primary endpoint, declared before this run: E1 minus candidate, hottest-day skill, all years,
+# pooled over the replication origins 1934/1941/1948, paired year-block bootstrap; predicted
+# < 0. Per origin, 1941 < 0 and 1948 <= 0. Void if E1's in-fold lambda is clipped to 0.
+# Refuted if the pooled estimate and the 1941 difference are both > 0 with lambda > 0.
+# Paired: uv run python scripts/paired_bootstrap.py configs/at_round3_h27.yaml --origins replication
+name: round3_h27
+description: >
+  E1 (damped city anomaly for hottest day and precipitation), exactly as run in round 2, against
+  the candidate, scored on the replication origins.
+
+forecasters:
+  - trend_level10_15_sensitivity   # reference
+  - e1_damped_hot_precip
+
+pooled_trends:
+  trend_level10_15_sensitivity: {level_years: [10, 15], trend_window: 40, cdd_sensitivity: true}
+
+custom:
+  e1_damped_hot_precip:
+    kind: anomaly_correction
+    params:
+      base: trend_level10_15_sensitivity
+      metrics: [hottest_day_temp, total_precip_in]
+      window: 15
+
+reference: trend_level10_15_sensitivity

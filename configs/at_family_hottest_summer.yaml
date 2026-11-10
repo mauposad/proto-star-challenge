@@ -1,0 +1,58 @@
+# Family 2 of the round-1 tests (hypotheses.md: H2 and H14, merged as the critics asked).
+# All claims are exploratory (methodologist X2/X3). Primary endpoint, declared before this run:
+#   h2_jja_slope -> hottest-day skill difference, lead years 4-7, paired year-block bootstrap
+#                   against trend_level10_15_sensitivity on the ADR 0004 folds.
+# Secondary: every other arm on the same endpoint, and the all-years raw score.
+# Decision rule: an arm passes when its 95% interval excludes 0 in the favourable direction.
+# kappa = 1 is a pure location shift (the whole summer distribution moves together), an
+# a-priori assumption. It is not a constant from post-2018 work (methodologist H2-d).
+# The in-fold kappa_hat is logged as a diagnostic.
+# Needs: uv run python scripts/build_summer_means.py (per-year June-August means, joined by year).
+# Run:    uv run proto-star climate-trial configs/at_family_hottest_summer.yaml --record
+# Paired: uv run python scripts/paired_bootstrap.py configs/at_family_hottest_summer.yaml
+name: family_hottest_summer
+description: >
+  Hottest day from the 30-year mean plus a June-August-based shift: the pooled June-August Tmax
+  slope (H2), the annual-temperature slope, the hottest day's own slope, a constant-shift
+  control, and the recent June-August level without (H14) and with the slope. Other metrics
+  stay as trend_level10_15_sensitivity.
+
+join_summer: true
+
+forecasters:
+  - thirty_year_mean
+  - trend_level10_15_sensitivity   # reference: the current submission candidate
+  - h2_jja_slope
+  - h2_annual_slope
+  - h2_own_slope
+  - h2_constant_shift
+  - h14_summer_level
+  - h14_summer_level_slope
+
+pooled_trends:
+  trend_level10_15_sensitivity:
+    level_years: [10, 15]
+    trend_window: 40
+    cdd_sensitivity: true
+
+custom:
+  h2_jja_slope:
+    kind: hottest_summer
+    params: {base: trend_level10_15_sensitivity, arm: jja_slope}
+  h2_annual_slope:
+    kind: hottest_summer
+    params: {base: trend_level10_15_sensitivity, arm: annual_slope}
+  h2_own_slope:
+    kind: hottest_summer
+    params: {base: trend_level10_15_sensitivity, arm: own_slope}
+  h2_constant_shift:
+    kind: hottest_summer
+    params: {base: trend_level10_15_sensitivity, arm: constant_shift}
+  h14_summer_level:
+    kind: hottest_summer
+    params: {base: trend_level10_15_sensitivity, arm: summer_level}
+  h14_summer_level_slope:
+    kind: hottest_summer
+    params: {base: trend_level10_15_sensitivity, arm: summer_level_slope}
+
+reference: trend_level10_15_sensitivity

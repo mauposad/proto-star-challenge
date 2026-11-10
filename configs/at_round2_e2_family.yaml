@@ -1,0 +1,48 @@
+# Round 2: the E2 family (hypotheses.md: E2, H21, H23 = H32). All claims are exploratory.
+# Primary endpoint for every arm, declared before this run: the temperature skill difference,
+# all years, as a paired year-block bootstrap against trend_level10_15_sensitivity on the
+# ADR 0004 folds.
+# Mechanism readouts, logged per cut-off:
+#   H21 predicts beta_regional < beta_local (the regional part reverts);
+#   H23/H32 predicts beta_tmin_half > beta_tmax_half (the Tmin part persists).
+# Decision rule: an arm passes when its 95% interval excludes 0 and the early-origin set
+# (1955/1962/1969) does not reverse the sign. A split beats E2 only if it does so on both the
+# official folds and the 7 cut-offs.
+# Run:    uv run proto-star climate-trial configs/at_round2_e2_family.yaml --record
+# Paired: uv run python scripts/paired_bootstrap.py configs/at_round2_e2_family.yaml [--origins seven|early]
+name: round2_e2_family
+description: >
+  Shrinking the city-specific part of the candidate's recent temperature and CDD anomaly, with
+  coefficients fitted on in-fold pseudo-origins: one coefficient (E2), separate regional and
+  local coefficients (H21), and separate Tmax and Tmin coefficients for temperature (H23/H32).
+
+forecasters:
+  - thirty_year_mean
+  - trend_level10_15_sensitivity   # reference: the current submission candidate
+  - e2_temp_city_shrink
+  - h21_region_split
+  - h23_diurnal_split
+
+pooled_trends:
+  trend_level10_15_sensitivity: {level_years: [10, 15], trend_window: 40, cdd_sensitivity: true}
+
+custom:
+  e2_temp_city_shrink:
+    kind: anomaly_correction
+    params: {base: trend_level10_15_sensitivity, metrics: [annual_avg_temp, cdd], window: 15}
+  h21_region_split:
+    kind: anomaly_correction
+    params:
+      base: trend_level10_15_sensitivity
+      metrics: [annual_avg_temp]
+      window: 15
+      split: region
+  h23_diurnal_split:
+    kind: anomaly_correction
+    params:
+      base: trend_level10_15_sensitivity
+      metrics: [annual_avg_temp]
+      window: 15
+      split: diurnal
+
+reference: trend_level10_15_sensitivity

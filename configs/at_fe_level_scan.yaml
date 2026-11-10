@@ -1,0 +1,32 @@
+# Round 2, step 1: does a longer level window, projected with the pooled slope, beat the
+# candidate's 10/15-year level? A level of the last N valid years plus the pooled slope times
+# (year - mean year of those N) is the panel fixed-effects line: a city intercept with a common
+# slope. Exploratory.
+# Primary arm, chosen from theory before running: fe40. Under a linear trend over the trend
+# window and roughly independent years, the efficient level uses the whole window. Its primary
+# endpoint is the raw-score difference, all years, as a paired year-block bootstrap against
+# trend_level10_15_sensitivity on the ADR 0004 folds. It passes when the 95% interval excludes
+# 0 and the early-origin set (1955/1962/1969) does not reverse the sign. fe20 and fe30 are
+# diagnostics of the bias-variance trade-off and are not selected from.
+# Run:    uv run proto-star climate-trial configs/at_fe_level_scan.yaml --record
+# Paired: uv run python scripts/paired_bootstrap.py configs/at_fe_level_scan.yaml [--origins seven|early]
+name: fe_level_scan
+description: >
+  Temperature and CDD levels from the last 20, 30 or 40 valid years, projected with the pooled
+  40-year slope (CDD through each city's CDD per degree), against the candidate's 10/15-year
+  levels. Precipitation and hottest day stay on the 30-year mean.
+
+forecasters:
+  - thirty_year_mean
+  - trend_level10_15_sensitivity   # reference: the current submission candidate
+  - fe20
+  - fe30
+  - fe40
+
+pooled_trends:
+  trend_level10_15_sensitivity: {level_years: [10, 15], trend_window: 40, cdd_sensitivity: true}
+  fe20: {level_years: [20], trend_window: 40, cdd_sensitivity: true}
+  fe30: {level_years: [30], trend_window: 40, cdd_sensitivity: true}
+  fe40: {level_years: [40], trend_window: 40, cdd_sensitivity: true}
+
+reference: trend_level10_15_sensitivity

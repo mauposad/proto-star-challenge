@@ -1,0 +1,38 @@
+# Submission trial: E2 (hypotheses.md, Round 2). It is the only change that met the adoption
+# rule fixed before the final runs (methodologist R2-X3):
+#   - the official-fold interval excludes 0;
+#   - the sign holds on the replication origins 1934/1941/1948;
+#   - the in-fold coefficient has the same sign at all three cut-offs.
+# Exploratory: the expected real gain over the previous candidate is small (+0.05 to +0.2 raw).
+# Chosen from validation results only (never leaderboard scores). Evidence: docs/experiments.md
+# (rows dated 2026-11-10) and docs/trials/candidate_error_analysis.md.
+# Run:     uv run proto-star climate-trial configs/at_submit_e2.yaml --record
+# Package: uv run proto-star climate-package configs/at_submit_e2.yaml
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+name: submit_e2
+description: >
+  The pooled-trend candidate plus E2: the city-specific part of each city's recent temperature
+  and CDD anomaly (the last 15 valid years minus the 30-year mean, less the cross-city mean) is
+  damped by a coefficient fitted on in-fold pseudo-origins (lambda about 0.6-0.8).
+  Precipitation and hottest day stay on the 30-year mean.
+
+forecasters:
+  - thirty_year_mean
+  - current_best
+  - trend_level10_15_sensitivity   # reference: the previous submission candidate
+  - e2_temp_city_shrink
+
+pooled_trends:
+  trend_level10_15_sensitivity: {level_years: [10, 15], trend_window: 40, cdd_sensitivity: true}
+
+custom:
+  e2_temp_city_shrink:
+    kind: anomaly_correction
+    description: >-
+      Pooled-trend candidate (levels 10/15, pooled 40-year slope, CDD per degree) with the
+      city-specific part of the recent 15-year temperature and CDD anomaly damped by an in-fold
+      coefficient fitted on 30 pseudo-origins
+    params: {base: trend_level10_15_sensitivity, metrics: [annual_avg_temp, cdd], window: 15}
+
+reference: trend_level10_15_sensitivity
+submit: e2_temp_city_shrink

@@ -1,0 +1,66 @@
+# Round 2, assistant hypotheses E1-E4 (hypotheses.md), each grounded in
+# docs/trials/candidate_error_analysis.md. All claims are exploratory. Primary endpoints,
+# declared before this run, each a paired year-block bootstrap against
+# trend_level10_15_sensitivity on the ADR 0004 folds:
+#   e1_damped_hot_precip      -> hottest-day skill, all years
+#   e2_temp_city_shrink       -> temperature skill, all years
+#   e3_trend_scale            -> temperature skill, lead years 4-7 (expect no transfer to 2019+)
+#   e4_precip_relative_trend  -> precipitation skill, all years
+# Decision rule: an arm passes when its 95% interval excludes 0 and the early-origin set
+# (1955/1962/1969) does not reverse the sign. The other arms are secondary.
+# Run:    uv run proto-star climate-trial configs/at_round2_assistant.yaml --record
+# Paired: uv run python scripts/paired_bootstrap.py configs/at_round2_assistant.yaml [--origins seven|early]
+name: round2_assistant
+description: >
+  E1 damped city anomaly for the hottest day and precipitation; E2 shrinking only the
+  city-specific part of the temperature and CDD anomaly; E3 an in-fold multiplier on the pooled
+  trend; E4 a pooled relative precipitation trend. All are fitted on in-fold pseudo-origins
+  where needed and applied on top of trend_level10_15_sensitivity.
+
+forecasters:
+  - thirty_year_mean
+  - trend_level10_15_sensitivity   # reference: the current submission candidate
+  - e1_damped_hot_precip
+  - e1_damped_hot_precip_national
+  - e2_temp_city_shrink
+  - e3_trend_scale
+  - e4_precip_relative_trend
+  - e1_e2_combined
+
+pooled_trends:
+  trend_level10_15_sensitivity: {level_years: [10, 15], trend_window: 40, cdd_sensitivity: true}
+
+custom:
+  e1_damped_hot_precip:
+    kind: anomaly_correction
+    params:
+      base: trend_level10_15_sensitivity
+      metrics: [hottest_day_temp, total_precip_in]
+      window: 15
+  e1_damped_hot_precip_national:
+    kind: anomaly_correction
+    params:
+      base: trend_level10_15_sensitivity
+      metrics: [hottest_day_temp, total_precip_in]
+      window: 15
+      national: true
+  e2_temp_city_shrink:
+    kind: anomaly_correction
+    params:
+      base: trend_level10_15_sensitivity
+      metrics: [annual_avg_temp, cdd]
+      window: 15
+  e3_trend_scale:
+    kind: trend_scale
+    params: {}
+  e4_precip_relative_trend:
+    kind: relative_trend
+    params: {base: trend_level10_15_sensitivity, trend_window: 60}
+  e1_e2_combined:
+    kind: anomaly_correction
+    params:
+      base: e2_temp_city_shrink
+      metrics: [hottest_day_temp, total_precip_in]
+      window: 15
+
+reference: trend_level10_15_sensitivity

@@ -1,0 +1,30 @@
+# Round 3, H37 (hypotheses.md): hottest-day persistence decays with lead, so leads 1-3 and 4-7
+# get separate in-fold coefficients on the city part of the recent anomaly. Exploratory. The
+# parent E1 failed its root gate, so H37 cannot be adopted under the fixed rule (R2-X3)
+# unless the human registers it as a new root.
+# Primary endpoint, declared before this run: hottest-day skill difference, all years, paired
+# year-block bootstrap against the nested parent e1_hottest, on the ADR 0004 folds.
+# Refuted if lambda_short - lambda_long < 0.1 at any official cut-off (lambda = 1 + beta), or
+# the paired difference is <= 0 on the official folds or the replication set.
+# Paired: uv run python scripts/paired_bootstrap.py configs/at_round3_h37.yaml [--origins seven|early|replication]
+name: round3_h37
+description: >
+  E1's damped city anomaly for the hottest day with one coefficient (parent), against the same
+  correction with separate coefficients for leads 1-3 and 4-7 (H37).
+
+forecasters:
+  - e1_hottest    # reference: the nested parent
+  - h37_lead_groups
+
+pooled_trends:
+  trend_level10_15_sensitivity: {level_years: [10, 15], trend_window: 40, cdd_sensitivity: true}
+
+custom:
+  e1_hottest:
+    kind: anomaly_correction
+    params: {base: trend_level10_15_sensitivity, metrics: [hottest_day_temp], window: 15, clip: [0.0, 1.0]}
+  h37_lead_groups:
+    kind: anomaly_correction
+    params: {base: trend_level10_15_sensitivity, metrics: [hottest_day_temp], window: 15, clip: [0.0, 1.0], lead_split: 3}
+
+reference: e1_hottest

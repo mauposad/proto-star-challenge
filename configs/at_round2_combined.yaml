@@ -1,0 +1,34 @@
+# Round 2: the combination suggested by the E2-family result (configs/at_round2_e2_family.yaml).
+# H23/H32's diurnal split for temperature, whose mechanism readout held at every cut-off
+# (lambda_Tmin about 0.83-1.04, lambda_Tmax about 0.31-0.58), plus E2's city shrinkage for CDD.
+# Exploratory: this arm was chosen after seeing the E2-family fold results, so its official-fold
+# score is optimistic. The early origins and the 7 cut-offs are the honest check.
+# Primary endpoint, declared before this run: raw-score difference, all years, paired year-block
+# bootstrap against trend_level10_15_sensitivity. Report the official folds, the 7 cut-offs and
+# the early origins (1955/1962/1969).
+# Run:    uv run proto-star climate-trial configs/at_round2_combined.yaml --record
+# Paired: uv run python scripts/paired_bootstrap.py configs/at_round2_combined.yaml [--origins seven|early]
+name: round2_combined
+description: >
+  The candidate with the city-specific part of its recent temperature anomaly split into Tmax and
+  Tmin halves with separate in-fold coefficients (H23/H32), and the city-specific part of its CDD
+  anomaly shrunk by an in-fold coefficient (E2).
+
+forecasters:
+  - thirty_year_mean
+  - trend_level10_15_sensitivity   # reference: the current submission candidate
+  - e2_cdd_only
+  - h23_temp_e2_cdd
+
+pooled_trends:
+  trend_level10_15_sensitivity: {level_years: [10, 15], trend_window: 40, cdd_sensitivity: true}
+
+custom:
+  e2_cdd_only:
+    kind: anomaly_correction
+    params: {base: trend_level10_15_sensitivity, metrics: [cdd], window: 15}
+  h23_temp_e2_cdd:
+    kind: anomaly_correction
+    params: {base: e2_cdd_only, metrics: [annual_avg_temp], window: 15, split: diurnal}
+
+reference: trend_level10_15_sensitivity

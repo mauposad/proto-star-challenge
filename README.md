@@ -103,9 +103,9 @@ uv run proto-star climate-package configs/<initials>_<name>.yaml          # subm
 
 ## Evidence for the judging criteria
 
-[docs/submission/evidence.md](docs/submission/evidence.md) maps each claim under **Scientific,
-Research, or Societal Value** and **Technical Creativity** to the file and command that checks
-it. `proto-star climate-package` copies it into the dataset card. The main entries:
+[docs/submission/evidence.md](docs/submission/evidence.md) maps each claim under five judging
+criteria (reuse, interoperability, reproducibility, scientific value and technical creativity) to
+the file and command that checks it. `proto-star climate-package` copies it into the dataset card. The main entries:
 
 - **Findings:** a city's drift matters only against its neighbours; that gain fades after about
   2003; hottest-day persistence changes sign with the era; more flexible models do worse; 33

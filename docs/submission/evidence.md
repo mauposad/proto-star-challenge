@@ -1,13 +1,56 @@
-# Evidence: scientific value and technical creativity
+# Evidence for the judging criteria
 
-This section maps each claim we make under two judging criteria to a file and a command that
+This section maps each claim we make under five judging criteria to a file and a command that
 checks it. Every number is copied from a tracked trial note or log row. All of it comes from
 backtests on data through 2018-12-31; nothing here was chosen with 2019–2025 data or with a
 leaderboard score.
 
-Links point to two branches of the team repository:
-[`agent/ml-challengers`][ml] (the final-round code plus the work below) and
-[`agent/hypothesis-trials`][ht] at commit `4ac87a8` (the hypothesis rounds).
+Links point to the team repository: [`agent/ml-challengers`][ml] (the final-round code plus the
+work below), [`agent/hypothesis-trials`][ht] at commit `4ac87a8` (the hypothesis rounds), and
+the branches named in each row.
+
+## Demonstrated reuse and extensibility
+
+*Rubric: "Meaningful use or rigorous attempted reuse of ProtoStar artifacts; useful extension,
+diagnosis, or recommendation for future researchers."*
+
+| # | Claim | Result | Where to check |
+| :- | :---- | :----- | :------------- |
+| R1 | All four subsets of the challenge dataset are used, through one shared master table | `daily`, `annual_indices`, `city_info` and `coverage_and_stations` are joined, cleaned and flagged into one table with a content hash (`99128065…`) that every trial note records | [`docs/data.md`][data], "Annual master table" |
+| R2 | **Attempted reuse of the source study's own method.** Lai & Dzombak's (2020) ARIMA procedure was re-implemented with the paper's rules and scored on our folds | Raw score 0.26 / −0.96 / 1.06 (all years / years 1–3 / years 4–7), against 4.14 for the pooled trend: the published method does not carry over to seven-year city forecasts | branch [`agent/paper-p13-arima`][p13], `docs/experiments.md` |
+| R3 | Methods from about ten more papers were re-implemented on the same folds, wins and losses kept | OCN 2.35, N-BEATS 2.32, DeepAR 2.39, pooled ridge for CDD 3.60, pooled trend 4.14 (raw, all years) | branches `agent/paper-*`; [comparison note][cmp] |
+| R4 | **Extension point:** a model kind is one file in a plug-in registry, and a kind can wrap any other kind | Two other teams' published methods (Tatakae, PstarAlu; CC BY 4.0) were re-implemented from their README text as components; tonight's `city_drift` and `residual_boost` stack on any registered forecaster | [`forecasters/__init__.py`][reg]; [`final_round.md`][fr], section 4 |
+| R5 | **Diagnosis of the artifacts for the next user** | `Max Tmax` is integer-valued before 2018 and only 59% integer in 2018, a precision change in the last training year. The chronology of `Station Segment` numbering is unverified, so we use `Station Changes` per year. Folds that include 1980 select slow-warming models (V6) | [`experiments.md`][exp], "H31 gate" row; [`hypotheses.md`][hyp], "Final (Round 3)" |
+
+## Interoperability and integration
+
+*Rubric: "Successful combination or portability across repositories, institutions, agencies,
+environments, or domains, or rigorous evidence showing why integration fails; value and limits
+of common standards and machine-actionable formats."*
+
+| # | Claim | Result | Where to check |
+| :- | :---- | :----- | :------------- |
+| I1 | Sources from several institutions are integrated with one documented procedure | CMU challenge tables, NOAA GHCN-Daily (station inventory and neighbour stations), Met Office/CRU HadCRUT4, NOAA ERSSTv5, U.S. Census population, NLCD land cover, elevation and climate indices: each with source, licence, download command and checksum. The submitted forecaster reads only the challenge tables; the others feed the regional model and the analysis | [`docs/data.md`][data], "External data" and "Input artifact checksums"; `tests/test_external_*.py` |
+| I2 | The 2018 cut-off is enforced where sources meet | Every weather input passes `assert_weather_cutoff`. HadCRUT4 has no server-side date filter, so its download caps the text before anything is written | [`docs/data.md`][data], "Leakage policy" and "HadCRUT4" |
+| I3 | Machine-actionable package | The card's YAML `configs` block makes `submission.csv` load with `datasets.load_dataset`; `data/README.md` describes every file; `code/reproduce.py` rebuilds the forecasts and compares them with the file | this dataset card; `code/` and `data/` |
+| I4 | **Where integration failed, with the evidence** | (a) `chronos-forecasting` 1.5 would have downgraded `transformers`, `huggingface-hub` and `datasets` in the shared lock; 2.x adds three packages and changes none. (b) Chronos-Bolt could not be used at all: its training data is unpublished, so the data rule cannot be checked. (c) Chronos-T5 on a laptop CPU took 1.0 s for 10 series and 124 s for 100 in one batch, so the kind batches by 10. (d) Two branches each added a registry named `proto_star.forecasters`, one a module and one a package, and cannot be merged without a port | [`ml_challengers.md`][mlc], "Dependency" and "The 2018 data cut-off"; [comparison note][cmp], section 4 |
+| I5 | The correction method is portable across forecasters | The same kind runs on the pooled trend in the tests and on `r4_winners` in the trial, with no change | [`test_city_drift.py`][cdtest]; [`at_city_drift.yaml`][cdyaml] |
+
+## Reproducibility and openness
+
+*Rubric: "Ability for others to reproduce the work using provided materials."*
+
+- **The package checks itself.** `python code/reproduce.py` rebuilds all 5,880 forecasts from
+  `data/` and compares them with `submission.csv`. Four builds on 2026-11-10 gave identical
+  bytes.
+- **Every result names its inputs.** Each trial note records the config, the commit, the data
+  content hash and the folds; candidates and selection rules are written in the config header
+  before the runs ([`at_city_drift.yaml`][cdyaml]).
+- **Tests guard the cut-off.** 252 tests pass; they include look-ahead checks (features ignore
+  years after the origin) and nesting checks (zero strength reproduces the base).
+- **The research record is open.** Hypotheses, critiques and a ledger of 620 validated events
+  are in the repository, including the places where the record and the files disagreed
+  ([`ledger/`][ledger]).
 
 ## Scientific, research, or societal value
 
@@ -87,3 +130,8 @@ uv run pytest tests/test_city_drift.py tests/test_paired.py tests/test_ml_challe
 [exp]: https://github.com/mauposad/proto-star-challenge/blob/4ac87a8f1a3bfb29ab85b7a7b2e9c0fefedc14b7/docs/experiments.md
 [cea]: https://github.com/mauposad/proto-star-challenge/blob/4ac87a8f1a3bfb29ab85b7a7b2e9c0fefedc14b7/docs/trials/candidate_error_analysis.md
 [ledger]: https://github.com/mauposad/proto-star-challenge/tree/4ac87a8f1a3bfb29ab85b7a7b2e9c0fefedc14b7/ledger
+[data]: https://github.com/mauposad/proto-star-challenge/blob/agent/ml-challengers/docs/data.md
+[reg]: https://github.com/mauposad/proto-star-challenge/blob/agent/ml-challengers/src/proto_star/forecasters/__init__.py
+[fr]: https://github.com/mauposad/proto-star-challenge/blob/agent/ml-challengers/docs/trials/final_round.md
+[p13]: https://github.com/mauposad/proto-star-challenge/tree/agent/paper-p13-arima
+[cmp]: https://github.com/mauposad/proto-star-challenge/blob/4ac87a8f1a3bfb29ab85b7a7b2e9c0fefedc14b7/docs/trials/approaches_comparison.md

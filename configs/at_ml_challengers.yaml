@@ -1,0 +1,104 @@
+# ML challengers against the final-round winner (r4_winners, configs/mp_final_round.yaml).
+# Run:    uv run proto-star climate-trial configs/at_ml_challengers.yaml --record
+# Check:  uv run python scripts/robustness_origins.py configs/at_ml_challengers.yaml \
+#           --origins rolling27 --default r4_winners --out runs/robustness/ml_challengers
+# Needs the hf extra for the Chronos rows: uv sync --extra hf
+# Folds are fixed by ADR 0004 (cut-offs 1980, 1995, 2011) and cannot be set here.
+#
+# CANDIDATES. All were written into this file before the official-fold and 27-origin runs.
+# Rows marked (*) were added after a one-fold smoke test at the 2011 cut-off, which showed:
+# r4_winners mean skill 9.36; ml1 3.54; ml2 7.09; ml4 -3.44 (Chronos, 64-year context).
+# The smoke test used official-fold truth, so the (*) rows are exploratory. No row was dropped.
+#   ml1_rb_raw            option 1: r4_winners + gradient-boosted correction of its errors
+#   ml2_rb_city           option 1: same, city-relative target (no common shift)
+#   ml3_rb_city_strong (*) option 1: ml2 with depth 2, leaves >= 1000, 100 trees, shrink 0.5
+#   ml4_chronos64         option 2: Chronos-T5-small zero-shot, 64-year context, all metrics
+#   ml5_chronos30 (*)     option 2: same with a 30-year context
+#   ml6_r4_chronos_mean   option 2: per metric, equal-weight mean of r4_winners and ml4
+#
+# SELECTION RULE: the final round's rule (proto_star.robustness.apply_selection_rule), with
+# r4_winners as the default and raw_score (all metrics) on window "all" (ADR 0009). A candidate
+# replaces r4_winners only if all three hold:
+#   1. its mean raw score on the official folds is higher than r4_winners';
+#   2. its mean raw score over the 27 rolling origins (1985-2011) is higher;
+#   3. it beats r4_winners at >= 60% of the 27 origins.
+# Chronos rows are exploratory whatever the result: the pretrained weights are an input the
+# team did not fit. Their published training corpus has no weather data after 2018 (USHCN to
+# 2014-12-31, WeatherBench 1979-2018); see docs/trials/ml_challengers.md.
+# No leaderboard score and no 2019-2025 data is used for any choice.
+name: ml_challengers
+description: >
+  Option 1, gradient-boosted error correction stacked on the final-round winner; option 2,
+  zero-shot Chronos-T5-small, alone and averaged with the winner. Compared with r4_winners.
+
+forecasters:
+  - thirty_year_mean
+  - r2_lead_split3
+  - r4_winners
+  - ml1_rb_raw
+  - ml2_rb_city
+  - ml3_rb_city_strong
+  - ml4_chronos64
+  - ml5_chronos30
+  - ml6_r4_chronos_mean
+
+models:
+  r2_lead_split3: {kind: lead_blend, params: {}}
+  # Copied verbatim from configs/mp_final_round.yaml (r4_winners).
+  r4_winners: &r4
+    kind: swap_metric
+    params:
+      metric: hottest_day_temp
+      base:
+        kind: swap_metric
+        params:
+          metric: total_precip_in
+          base: {kind: lead_blend, params: {}}
+          components:
+            - {kind: final_precip_nudge, params: {k: 31, recent_years: 10, fraction: 0.3, window: 30, min_years: 10}}
+            - {kind: final_precip_two_half, params: {fay_herriot: true, window: 30, long_window: 45, early_leads: 3, min_days: 360, min_valid: 10, min_complete: 10, min_complete_long: 15, median_shrink: 0.5, bandwidth_km: 300.0, record_years: 90, fh_min_window_years: 15, fh_min_record_years: 30, fh_min_kernel_weight: 0.5}}
+      components:
+        - {kind: final_hottest_nudge, params: {k: 31, recent_years: 10, fraction: 0.3, window: 30, min_years: 10}}
+        - {kind: final_hottest_second_high, params: {window: 30, min_days: 360, min_complete: 10, bandwidth_km: 300.0}}
+
+  ml1_rb_raw:
+    kind: residual_boost
+    params: {base: *r4, target: raw, pseudo_origins: 30, max_iter: 200, learning_rate: 0.05, max_depth: 3, min_samples_leaf: 200, l2_regularization: 1.0, shrink: 1.0, seed: 0}
+  ml2_rb_city:
+    kind: residual_boost
+    params: {base: *r4, target: city, pseudo_origins: 30, max_iter: 200, learning_rate: 0.05, max_depth: 3, min_samples_leaf: 200, l2_regularization: 1.0, shrink: 1.0, seed: 0}
+  ml3_rb_city_strong:
+    kind: residual_boost
+    params: {base: *r4, target: city, pseudo_origins: 30, max_iter: 100, learning_rate: 0.05, max_depth: 2, min_samples_leaf: 1000, l2_regularization: 10.0, shrink: 0.5, seed: 0}
+
+  ml4_chronos64: &chronos64
+    kind: chronos_zero_shot
+    params: {model_id: amazon/chronos-t5-small, revision: a971ba21945c4f1796b17a91fe69214b5f4ad472, context_years: 64, num_samples: 20, batch_size: 10, min_years: 10, seed: 0}
+  ml5_chronos30:
+    kind: chronos_zero_shot
+    params: {model_id: amazon/chronos-t5-small, revision: a971ba21945c4f1796b17a91fe69214b5f4ad472, context_years: 30, num_samples: 20, batch_size: 10, min_years: 10, seed: 0}
+  # Per metric, the equal-weight mean of r4_winners and ml4 (one swap per metric, nested).
+  ml6_r4_chronos_mean:
+    kind: swap_metric
+    params:
+      metric: cdd
+      components: &mean_members [*r4, *chronos64]
+      base:
+        kind: swap_metric
+        params:
+          metric: hottest_day_temp
+          components: *mean_members
+          base:
+            kind: swap_metric
+            params:
+              metric: total_precip_in
+              components: *mean_members
+              base:
+                kind: swap_metric
+                params:
+                  metric: annual_avg_temp
+                  components: *mean_members
+                  base: *r4
+
+reference: thirty_year_mean
+submit: r4_winners

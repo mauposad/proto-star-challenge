@@ -21,7 +21,11 @@ dependencies = [
 
 [project.optional-dependencies]
 # Deep learning / transformers stack. Heavy, so opt-in: `uv sync --extra hf`
-hf = ["torch>=2.4", "transformers>=4.45"]
+hf = [
+    "chronos-forecasting>=2",
+    "torch>=2.4",
+    "transformers>=4.45",
+]
 # Gridded climate data (NetCDF / Zarr). Opt-in: `uv sync --extra geo`
 geo = ["xarray>=2024.7", "netcdf4>=1.7", "zarr>=2.18", "dask>=2024.8"]
 

@@ -51,6 +51,7 @@ EVIDENCE_SCRIPTS = ("compare_baselines.py", "evaluate_metric_ensemble.py")
 DOWNLOAD = "`python code/scripts/download_protostar_data.py`"
 TEAM_FILE = PROJECT_ROOT / "docs" / "submission" / "team.yaml"
 SUBMISSION_DOCS = ("policy-idea.md", "ecosystem-feedback.md")
+EVIDENCE_DOC = "evidence.md"  # optional: claims under the judging criteria, with where to check
 PLACEHOLDER = re.compile(r"<[^<>\n]*(?:team|username|institution|Name)[^<>\n]*>")
 REPRODUCE_SCRIPT = '''"""Rebuild submission.csv from ../data and compare it with the shipped file.
 
@@ -303,6 +304,14 @@ def _team_sections(team: dict[str, object]) -> tuple[str, str]:
     return markdown_table(members), ai
 
 
+def evidence_section(docs_dir: Path) -> str:
+    """The dataset card's judging-evidence section, or ``""`` if ``evidence.md`` is absent."""
+    path = docs_dir / EVIDENCE_DOC
+    if not path.exists():
+        return ""
+    return f"## Evidence for the judging criteria\n\n{path.read_text().strip()}\n\n"
+
+
 def _readme(
     cfg: TrialConfig,
     forecaster: str,
@@ -322,6 +331,7 @@ def _readme(
         name: (PROJECT_ROOT / "docs" / "submission" / name).read_text().strip()
         for name in SUBMISSION_DOCS
     }
+    evidence = evidence_section(PROJECT_ROOT / "docs" / "submission")
     return f"""---
 pretty_name: "ProtoStar Climate Risk Intelligence - {team["team_name"]}"
 license: cc-by-4.0
@@ -363,7 +373,7 @@ Mean `raw_score` (the official score without its floor at zero) and per-metric s
 `{cfg.reference}`. The Final Score uses all seven years (2019-2025) with equal weight, so
 `all` is the matching window.
 
-## AI tools and agents
+{evidence}## AI tools and agents
 
 {ai_section}
 

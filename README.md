@@ -101,6 +101,21 @@ uv run proto-star climate-trial configs/<initials>_<name>.yaml --record   # back
 uv run proto-star climate-package configs/<initials>_<name>.yaml          # submission folder
 ```
 
+## Evidence for the judging criteria
+
+[docs/submission/evidence.md](docs/submission/evidence.md) maps each claim under **Scientific,
+Research, or Societal Value** and **Technical Creativity** to the file and command that checks
+it. `proto-star climate-package` copies it into the dataset card. The main entries:
+
+- **Findings:** a city's drift matters only against its neighbours; that gain fades after about
+  2003; hottest-day persistence changes sign with the era; more flexible models do worse; 33
+  hypotheses with intervals, negative results included
+  ([docs/trials/city_drift.md](docs/trials/city_drift.md),
+  [docs/trials/ml_challengers.md](docs/trials/ml_challengers.md)).
+- **Method:** in-fold stacking on pseudo-origins, city-relative by construction, with a control
+  arm, a paired year-block bootstrap and an audited AI research loop
+  (`src/proto_star/forecasters/city_drift.py`, `src/proto_star/paired.py`).
+
 ## Method
 
 TODO: describe the forecasting method and the backtest results that justify it.

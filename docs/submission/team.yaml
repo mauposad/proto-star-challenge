@@ -11,7 +11,13 @@ members:
   - name: Luke Corbett
     hf_username: "@corbe19"
     affiliation: Carnegie Mellon University
-ai_tools: Claude Code (mostly Opus and Sonnet models) and Warp.
-ai_work: Wrote and refactored code, tests and documentation drafts under the rules in AGENTS.md.
+ai_tools: >-
+  Claude Code (Opus, Sonnet and Fable models) and Warp. In the hypothesis rounds, Claude Code
+  also ran the EGM research plugin's generator, critic and ledger agents. Chronos-T5-small, a
+  pretrained time-series model, was tested as a challenger and is not used in any forecast.
+ai_work: >-
+  Wrote and refactored code, tests and documentation drafts under the rules in AGENTS.md;
+  proposed and critiqued hypotheses and kept the research ledger. No AI tool supplied or
+  corrected a forecast value.
 human_review: >-
   The team reviewed the agents' output and workflow, and validated the results.
